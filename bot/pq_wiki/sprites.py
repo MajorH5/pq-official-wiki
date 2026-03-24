@@ -49,7 +49,7 @@ _GIF_TRANS_KEY = (255, 0, 255)
 
 def _rgba_frames_to_transparent_gif(
     rgba_frames: list[Image.Image],
-    duration_ms: int,
+    duration_ms: int | list[int],
 ) -> bytes:
     """
     Encode animated GIF with binary transparency. Plain RGBA→GIF in Pillow often
@@ -58,6 +58,16 @@ def _rgba_frames_to_transparent_gif(
     """
     if not rgba_frames:
         raise ValueError("No frames")
+
+    if isinstance(duration_ms, int):
+        frame_durations = [duration_ms] * len(rgba_frames)
+    else:
+        frame_durations = list(duration_ms)
+        if len(frame_durations) != len(rgba_frames):
+            raise ValueError(
+                "duration list length must match frame count "
+                f"({len(frame_durations)} != {len(rgba_frames)})"
+            )
 
     # Build one shared palette from all frames so colors stay stable.
     rgba_frames = [fr.convert("RGBA") for fr in rgba_frames]
@@ -69,10 +79,13 @@ def _rgba_frames_to_transparent_gif(
         combined.paste(fr, (x_off, 0), fr)
         x_off += fr.size[0]
 
+    # Up to 256 palette entries (indices 0–255). Reserve one index for transparency.
+    # Previously trans_idx=255 was used with colors=255 (indices only 0–254), which wrote
+    # invalid colormap indices and broke ImageMagick/MediaWiki thumbnails ("invalid colormap index").
     combined_p = combined.convert("RGB").quantize(
         method=Image.Quantize.MEDIANCUT,
         dither=Image.Dither.NONE,
-        colors=255,  # reserve 1 palette index for transparency
+        colors=256,
     )
     trans_idx = 255
 
@@ -82,6 +95,11 @@ def _rgba_frames_to_transparent_gif(
         p_pixels = p.load()
         a_pixels = fr.split()[3].load()
         w, h = fr.size
+        # Avoid using the transparency index for opaque pixels (GIF treats that index as transparent).
+        for yy in range(h):
+            for xx in range(w):
+                if a_pixels[xx, yy] >= 128 and p_pixels[xx, yy] == trans_idx:
+                    p_pixels[xx, yy] = trans_idx - 1
         for yy in range(h):
             for xx in range(w):
                 if a_pixels[xx, yy] < 128:
@@ -95,7 +113,7 @@ def _rgba_frames_to_transparent_gif(
         format="GIF",
         save_all=True,
         append_images=p_frames[1:],
-        duration=duration_ms,
+        duration=frame_durations,
         loop=0,
         disposal=2,
         transparency=trans_idx,
@@ -104,20 +122,67 @@ def _rgba_frames_to_transparent_gif(
     return out.getvalue()
 
 
-def render_animation_to_gif_bytes(
-    animation: dict,
-    sheet: Image.Image,
-    fps_scale: float = 1.0,
-) -> bytes:
+def normalize_gif_bytes_for_imagemagick(data: bytes) -> bytes:
+    """
+    Re-save GIF with Pillow so palettes/indices are consistent. Fixes ImageMagick
+    thumbnail errors (invalid colormap index) on some Pillow outputs, including
+    tier-icon animations.
+    """
+    try:
+        im = Image.open(io.BytesIO(data))
+    except Exception:
+        return data
+    try:
+        n = getattr(im, "n_frames", 1)
+        out = io.BytesIO()
+        if n <= 1:
+            im.seek(0)
+            im.save(out, format="GIF", optimize=True)
+            return out.getvalue()
+        durations: list[int] = []
+        frames: list[Image.Image] = []
+        for i in range(n):
+            im.seek(i)
+            frames.append(im.copy())
+            durations.append(im.info.get("duration", 100))
+        loop = im.info.get("loop", 0)
+        trans = im.info.get("transparency")
+        if trans is not None:
+            frames[0].save(
+                out,
+                format="GIF",
+                save_all=True,
+                append_images=frames[1:],
+                duration=durations,
+                loop=loop,
+                disposal=2,
+                optimize=True,
+                transparency=trans,
+            )
+        else:
+            frames[0].save(
+                out,
+                format="GIF",
+                save_all=True,
+                append_images=frames[1:],
+                duration=durations,
+                loop=loop,
+                disposal=2,
+                optimize=True,
+            )
+        return out.getvalue()
+    except Exception:
+        return data
+
+
+def animation_frames_rgba(animation: dict, sheet: Image.Image) -> list[Image.Image]:
+    """Crop each cell from a sheet using Roblox-style Size / Base / Frames."""
     size = animation.get("Size") or {}
     base = animation.get("Base") or {}
     fw = int(_g(size, "X", "x", default=1))
     fh = int(_g(size, "Y", "y", default=1))
     bx, by = normalize_xy(base)
     frames_spec = animation.get("Frames") or []
-    fps = float(animation.get("Fps") or 10) * fps_scale
-    duration_ms = max(20, int(1000 / fps)) if fps > 0 else 100
-
     frames: list[Image.Image] = []
     for cell in frames_spec:
         if not isinstance(cell, (list, tuple)) or len(cell) < 2:
@@ -126,10 +191,23 @@ def render_animation_to_gif_bytes(
         left = bx + col * fw
         top = by + row * fh
         frames.append(_crop_sheet(sheet, left, top, fw, fh).convert("RGBA"))
+    return frames
 
+
+def _animation_duration_ms(animation: dict, fps_scale: float = 1.0) -> int:
+    fps = float(animation.get("Fps") or 10) * fps_scale
+    return max(20, int(1000 / fps)) if fps > 0 else 100
+
+
+def render_animation_to_gif_bytes(
+    animation: dict,
+    sheet: Image.Image,
+    fps_scale: float = 1.0,
+) -> bytes:
+    frames = animation_frames_rgba(animation, sheet)
     if not frames:
         raise ValueError("No frames in animation")
-
+    duration_ms = _animation_duration_ms(animation, fps_scale=fps_scale)
     return _rgba_frames_to_transparent_gif(frames, duration_ms)
 
 
@@ -218,6 +296,39 @@ def render_portal_animation_first_frame(portal_sprite: dict, which: str = "IdleA
     return buf.getvalue()
 
 
+def render_portal_sprite_gif_bytes(portal: dict, sheet: Image.Image) -> bytes:
+    """
+    Portal preview: play OpenAnimation once, then IdleAnimation for five full loops.
+    Uses each block's Fps (same formula as other animations; no projectile 0.5× factor).
+    """
+    open_anim = portal.get("OpenAnimation")
+    idle_anim = portal.get("IdleAnimation")
+    frames: list[Image.Image] = []
+    durs: list[int] = []
+
+    if open_anim:
+        ofs = animation_frames_rgba(open_anim, sheet)
+        if ofs:
+            od = _animation_duration_ms(open_anim, fps_scale=1.0)
+            for fr in ofs:
+                frames.append(fr)
+                durs.append(od)
+
+    if idle_anim:
+        ifs = animation_frames_rgba(idle_anim, sheet)
+        if ifs:
+            idur = _animation_duration_ms(idle_anim, fps_scale=1.0)
+            for _ in range(5):
+                for fr in ifs:
+                    frames.append(fr.copy())
+                    durs.append(idur)
+
+    if not frames:
+        raise ValueError("Portal produced no frames")
+
+    return _rgba_frames_to_transparent_gif(frames, durs)
+
+
 def render_sprite_object(sprite: dict) -> tuple[bytes, str]:
     """
     Returns (file_bytes, extension_without_dot).
@@ -247,10 +358,18 @@ def render_sprite_object(sprite: dict) -> tuple[bytes, str]:
 
 
 def portal_sprite_preview_bytes(portal: dict) -> Optional[tuple[bytes, str]]:
-    """Returns PNG bytes for portal idle first frame."""
+    """Returns GIF (open + idle×5) or PNG fallback (first idle/open frame)."""
     tex = get_texture_url(portal)
-    if not parse_asset_id(tex or ""):
+    aid = parse_asset_id(tex or "")
+    if not aid:
         return None
+    try:
+        raw = fetch_asset_bytes(aid)
+        sheet = Image.open(io.BytesIO(raw)).convert("RGBA")
+        b = render_portal_sprite_gif_bytes(portal, sheet)
+        return b, "gif"
+    except Exception:
+        pass
     for key in ("IdleAnimation", "OpenAnimation"):
         b = render_portal_animation_first_frame(portal, key)
         if b:

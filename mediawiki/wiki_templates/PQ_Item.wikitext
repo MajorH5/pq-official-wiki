@@ -1,0 +1,22 @@
+<noinclude>
+'''PQ Item layout''' — transcluded by every item page. Edit this template to change formatting for all items. After saving, purge a sample item page if changes do not appear (cache).
+
+Bot fills named parameters. Outer pipes are escaped as {{!}} in <code>{{PQ Item|…}}</code>. Do not wrap weapon/loot blocks in <code>#if</code> — ParserFunctions split on <code>|</code> and break wikitables inside parameters.
+</noinclude>{{{head|}}}
+
+{{{icon|}}}
+{{{desc|}}}
+
+== Notes ==
+<!-- Add editor notes/history here. -->
+
+== Information ==
+{{{information|}}}
+
+{{{on_equip|}}}
+
+{{{weapon|}}}
+
+{{{dropped_by|}}}
+
+{{{categories|}}}

@@ -1,0 +1,9 @@
+{{PQ Entity
+|icon=
+|found_in=
+|event_biomes=
+|statistics=
+|loot=
+|attacks=
+|categories=[[Category:Enemies]]
+}}

@@ -25,8 +25,11 @@ def _save_map(m: dict) -> None:
 
 
 def wiki_filename_for_hash(content_hash: str, ext: str) -> str:
-    short = content_hash[:16]
-    return f"PQ_tex_{short}.{ext}"
+    """
+    Use the full hash in the filename. A 16-char prefix was too short and caused
+    collisions (e.g. item sprite vs stat icon) mapping to the same PQ_tex_*.png.
+    """
+    return f"PQ_tex_{content_hash}.{ext}"
 
 
 def ensure_file_uploaded(

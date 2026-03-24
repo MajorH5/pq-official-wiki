@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import re
 from pathlib import Path
 
 import pywikibot
@@ -11,6 +12,7 @@ from pq_wiki.config import TEXTURE_CACHE_DIR, ensure_dirs
 from pq_wiki.sprites import (
     content_hash,
     get_texture_url,
+    normalize_gif_bytes_for_imagemagick,
     projectile_sprite_to_bytes,
     sprite_signature_for_hash,
 )
@@ -40,12 +42,19 @@ def upload_sprite_if_possible(
         log.debug("Sprite missing or no texture URL")
         return ""
     sig = sprite_signature_for_hash(sprite)
-    h = content_hash(sig)
     try:
         data, ext = sprites.render_sprite_object(sprite)
     except Exception as e:
         log.warning("Sprite render failed: %s", e)
         return ""
+
+    # Bump hash for GIFs so palette + IM-safe re-encode replaces cached bad GIFs (ImageMagick thumbs).
+    h = content_hash(sig)
+    if ext == "gif":
+        h = content_hash(f"{sig}|gif_palette_v3")
+
+    if ext == "gif":
+        data = normalize_gif_bytes_for_imagemagick(data)
 
     path = _cache_path(h, ext)
     if not path.exists():
@@ -61,6 +70,25 @@ def upload_sprite_if_possible(
         return ""
 
 
+def upload_sprite_thumb_block(
+    site: pywikibot.Site,
+    sprite: dict | None,
+    version: str,
+    thumb_size: int,
+    caption: str,
+) -> str:
+    """Uploaded sprite as a thumb with caption (no inline pixel-art span)."""
+    w = upload_sprite_if_possible(site, sprite, version, thumb_size=thumb_size)
+    if not w:
+        return ""
+    m = re.search(r"\[\[File:([^|]+)\|", w)
+    if not m:
+        return ""
+    fname = m.group(1)
+    safe = caption.replace("|", " ")
+    return f"[[File:{fname}|thumb|{thumb_size}px|{safe}]]"
+
+
 def upload_raw_bytes_fixed_hash(
     site: pywikibot.Site,
     data: bytes,
@@ -71,6 +99,8 @@ def upload_raw_bytes_fixed_hash(
     max_thumb_size: int | None = None,
 ) -> str:
     """Use deterministic hash from content_key (sprite sig) for stable filenames."""
+    if ext == "gif":
+        data = normalize_gif_bytes_for_imagemagick(data)
     sig_hash = content_hash(content_key)
     path = _cache_path(sig_hash, ext)
     if not path.exists():
@@ -97,8 +127,10 @@ def upload_projectile_sprite(
     except Exception as e:
         log.debug("Projectile sprite failed: %s", e)
         return ""
-    # Include speed profile marker so updated projectile timing invalidates old cached GIFs.
-    sig = sprite_signature_for_hash({"Projectile": proj_sprite, "fps_scale": 0.5})
+    # Include speed profile + palette encoding version so caches invalidate on GIF fixes.
+    sig = sprite_signature_for_hash(
+        {"Projectile": proj_sprite, "fps_scale": 0.5, "gif_palette_v3": True}
+    )
     return upload_raw_bytes_fixed_hash(
         site,
         data,
@@ -122,5 +154,5 @@ def upload_portal_preview(
     if not prev:
         return ""
     data, ext = prev
-    sig = sprite_signature_for_hash({"Portal": portal, "preview": "idle_first"})
+    sig = sprite_signature_for_hash({"Portal": portal, "preview": "open_idle5_gif_v1"})
     return upload_raw_bytes_fixed_hash(site, data, ext, sig, version, thumb_size=thumb_size)

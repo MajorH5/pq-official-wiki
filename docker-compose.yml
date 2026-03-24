@@ -27,6 +27,8 @@ services:
       - "8081:8081"
     volumes:
       - ./bot:/bot
+      # Layout wikitext for `python -m pq_wiki import-templates`
+      - ./mediawiki/wiki_templates:/mediawiki/wiki_templates:ro
     working_dir: /bot
     env_file:
       - .env
@@ -35,6 +37,7 @@ services:
       PYWIKIBOT_DIR: /bot
       # Ensure bot user is set even if .env omits or blanks WIKI_BOT_USER
       WIKI_BOT_USER: ${WIKI_BOT_USER:-Pqadmin}
+      WIKI_LAYOUT_TEMPLATES_DIR: /mediawiki/wiki_templates
       WIKI_MEDIAWIKI_HOST: mediawiki
       INGEST_HOST: 0.0.0.0
       INGEST_PORT: "8081"

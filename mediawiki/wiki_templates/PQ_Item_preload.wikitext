@@ -1,0 +1,9 @@
+{{PQ Item
+|head=
+|icon=
+|desc=
+|information=
+|on_equip=
+|weapon=
+|categories=[[Category:Items]]
+}}

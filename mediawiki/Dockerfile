@@ -10,6 +10,9 @@ RUN git clone --depth 1 https://github.com/wikimedia/mediawiki-extensions-Lockdo
 # Extension:Lingo (glossary hover tooltips)
 RUN git clone --depth 1 https://gerrit.wikimedia.org/r/mediawiki/extensions/Lingo.git /var/www/html/extensions/Lingo
 
+# ParserFunctions (#if, #ifeq, …) — required for PQ layout templates
+RUN git clone --depth 1 https://gerrit.wikimedia.org/r/mediawiki/extensions/ParserFunctions.git /var/www/html/extensions/ParserFunctions
+
 RUN a2enmod rewrite
 
 # Allow .htaccess in docroot (official image may use AllowOverride None)

@@ -1,0 +1,10 @@
+{{PQ Location
+|difficulty=
+|portal_image=
+|portal_table=
+|map_section=
+|screenshots_section=
+|found_entities=
+|dropped_from=
+|categories=[[Category:Locations]]
+}}

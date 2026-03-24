@@ -11,17 +11,35 @@ LAST_VERSION_PATH = STATE_DIR / "last_datadump_version.json"
 WIKI_OVERRIDES_PATH = BOT_ROOT / "wiki_overrides.json"
 
 ROBLOX_COOKIE = os.environ.get("ROBLOX_COOKIE", "").strip()
-WIKI_BOT_USER = os.environ.get("WIKI_BOT_USER", "Pqadmin").strip()
+# Must match the wiki account the bot logs in as (case-insensitive compare in save.py).
+# If .env sets WIKI_BOT_USER= empty, still default — empty string would skip every page as "human".
+WIKI_BOT_USER = (os.environ.get("WIKI_BOT_USER") or "Pqadmin").strip() or "Pqadmin"
 
 DATADUMP_INGEST_SECRET = os.environ.get("DATADUMP_INGEST_SECRET", "").strip()
 INGEST_HOST = os.environ.get("INGEST_HOST", "0.0.0.0")
 INGEST_PORT = int(os.environ.get("INGEST_PORT", "8081"))
 
-GENERATE_FEW_PAGES = os.environ.get("GENERATE_FEW_PAGES", "").strip().lower() in (
-    "1",
-    "true",
-    "yes",
-)
+def _parse_generate_few_pages_limit() -> int | None:
+    """
+    If set, import only this many items, locations, and entities (each list capped separately).
+    Empty / 0 / invalid = no limit (full import).
+    Legacy: true / yes still mean 3 each (old boolean \"few pages\" default).
+    """
+    raw = os.environ.get("GENERATE_FEW_PAGES", "").strip()
+    if not raw:
+        return None
+    if raw.lower() in ("true", "yes"):
+        return 3
+    try:
+        n = int(raw, 10)
+    except ValueError:
+        return None
+    if n <= 0:
+        return None
+    return n
+
+
+GENERATE_FEW_PAGES_LIMIT = _parse_generate_few_pages_limit()
 FORCE_OVERWRITE = os.environ.get("FORCE_OVERWRITE", "").strip().lower() in (
     "1",
     "true",
@@ -29,6 +47,13 @@ FORCE_OVERWRITE = os.environ.get("FORCE_OVERWRITE", "").strip().lower() in (
 )
 
 PQ_DATA_PREFIX = "PQ/Data"
+
+# Repo: <project>/mediawiki/wiki_templates/*.wikitext — used by `python -m pq_wiki import-templates`
+# Docker: mount that folder and set WIKI_LAYOUT_TEMPLATES_DIR=/mediawiki/wiki_templates (see docker-compose)
+_default_layout = BOT_ROOT.parent / "mediawiki" / "wiki_templates"
+WIKI_LAYOUT_TEMPLATES_DIR = Path(
+    os.environ.get("WIKI_LAYOUT_TEMPLATES_DIR", "").strip() or str(_default_layout)
+)
 
 
 def ensure_dirs() -> None:

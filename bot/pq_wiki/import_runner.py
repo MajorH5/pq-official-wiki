@@ -18,13 +18,14 @@ import pywikibot
 
 from pq_wiki.config import (
     FORCE_OVERWRITE,
-    GENERATE_FEW_PAGES,
+    GENERATE_FEW_PAGES_LIMIT,
     LAST_VERSION_PATH,
     WIKI_OVERRIDES_PATH,
     WIKI_BOT_USER,
     ensure_dirs,
 )
 from pq_wiki.difficulty_icons import build_difficulty_skull_wikitext
+from pq_wiki.drop_sources import build_item_id_to_drop_sources
 from pq_wiki.import_log import get_import_logger
 from pq_wiki.loot_tier_icons import build_drop_tier_icon_parts_map, build_drop_tier_wikitext_map
 from pq_wiki.render_pages import (
@@ -36,8 +37,10 @@ from pq_wiki.render_pages import (
     location_page_path,
     save_bot_page,
 )
+from pq_wiki.renderers.save import peek_skip_build_reason
 from pq_wiki.stat_icons import build_stat_icon_wikitext_map
 from pq_wiki.status_effect_icons import build_status_effect_icon_wikitext_map
+from pq_wiki.valor_icon import build_valor_icon_wikitext
 from pq_wiki.wiki_assets import ensure_pixel_art_css
 
 
@@ -97,6 +100,25 @@ def load_overrides() -> dict[str, dict[str, set[int]]]:
     return defaults
 
 
+def _warn_missing_layout_templates(site: pywikibot.Site, log) -> None:
+    """If layout templates are missing, item pages show raw {{PQ Item|...}} instead of rendering."""
+    for short in ("PQ Item", "PQ Entity", "PQ Location"):
+        title = f"Template:{short}"
+        p = pywikibot.Page(site, title)
+        try:
+            exists = p.exists()
+        except Exception as e:
+            log.warning("Could not check %s: %s", title, e)
+            continue
+        if not exists:
+            log.warning(
+                "MISSING %s — article pages will show unexpanded {{%s|...}} until you create it "
+                "(copy from mediawiki/wiki_templates/). See mediawiki/TEMPLATES.md",
+                title,
+                short,
+            )
+
+
 def _with_unreleased_namespace(title: str, unreleased: bool) -> str:
     if not unreleased:
         return title
@@ -141,6 +163,7 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
     log.info("Wiki login OK (%.0f ms)", (time.perf_counter() - t_login) * 1000)
 
     ensure_pixel_art_css(site)
+    _warn_missing_layout_templates(site, log)
 
     items = data.get("Items") or []
     locations = data.get("Locations") or []
@@ -174,19 +197,28 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
     log.info("Stat icons ready: %d", len(stat_icons))
     status_effect_icons = build_status_effect_icon_wikitext_map(site, data, version)
     log.info("Status effect icons ready: %d", len(status_effect_icons))
+    valor_icon_wikitext = build_valor_icon_wikitext(site, data, version)
+    log.info("Valor icon ready: %s", bool(valor_icon_wikitext))
     drop_tiers = {int((it.get("DropTierType") or 0)) for it in items}
     drop_tier_icons = build_drop_tier_wikitext_map(site, data, version, drop_tiers)
     drop_tier_icon_parts = build_drop_tier_icon_parts_map(site, data, version, drop_tiers)
     log.info("Drop tier icons ready: %d", len(drop_tier_icons))
     difficulty_skull_icon = build_difficulty_skull_wikitext(site, data, version, size_px=40)
 
-    items_to_process = items[:3] if GENERATE_FEW_PAGES else items
-    locations_to_process = locations[:3] if GENERATE_FEW_PAGES else locations
+    nlim = GENERATE_FEW_PAGES_LIMIT
+    items_to_process = items[:nlim] if nlim else items
+    locations_to_process = locations[:nlim] if nlim else locations
     all_entities = [go for go in game_objects if go.get("IsEntity", True)]
-    entities_to_process = all_entities[:3] if GENERATE_FEW_PAGES else all_entities
+    entities_to_process = all_entities[:nlim] if nlim else all_entities
 
-    if GENERATE_FEW_PAGES:
-        log.info("GENERATE_FEW_PAGES=1: limiting to 3 items, 3 locations, 3 entities")
+    if nlim:
+        log.info(
+            "GENERATE_FEW_PAGES cap %d per type: importing %d items, %d locations, %d entities",
+            nlim,
+            len(items_to_process),
+            len(locations_to_process),
+            len(entities_to_process),
+        )
 
     item_name_to_id: dict[str, int] = {}
     for it in items:
@@ -220,6 +252,15 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
         if lname and loc.get("Id") in location_id_to_path:
             location_name_to_path[str(lname)] = location_id_to_path[loc["Id"]]
 
+    location_name_to_portal: dict[str, dict[str, Any]] = {}
+    for loc in locations:
+        lname = str(loc.get("Name") or "")
+        if not lname:
+            continue
+        ps = loc.get("PortalSprite")
+        if isinstance(ps, dict) and ps:
+            location_name_to_portal[lname] = ps
+
     entity_name_to_locations: dict[str, list[str]] = {}
     for loc in locations:
         lname = str(loc.get("Name") or "")
@@ -228,14 +269,13 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
         lpath = location_id_to_path.get(loc.get("Id"))
         if not lpath:
             continue
-        link = f"[[{lpath}|{lname}]]"
         for go_name in (loc.get("FoundGameObjects") or []):
             if not go_name:
                 continue
             k = str(go_name)
             entity_name_to_locations.setdefault(k, [])
-            if link not in entity_name_to_locations[k]:
-                entity_name_to_locations[k].append(link)
+            if lname not in entity_name_to_locations[k]:
+                entity_name_to_locations[k].append(lname)
 
     entity_id_to_path: dict[int, str] = {}
     entities_sorted = sorted(
@@ -258,6 +298,17 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
         base = entity_page_path(go, used)
         entity_id_to_path[gid] = _with_unreleased_namespace(base, is_unreleased)
 
+    item_drop_sources = build_item_id_to_drop_sources(
+        game_objects,
+        item_name_to_id,
+        item_id_to_item,
+        entity_id_to_path,
+    )
+    log.info("Item drop sources: %d items with at least one enemy source", len(item_drop_sources))
+    entity_id_to_go: dict[int, dict[str, Any]] = {
+        int(go["Id"]): go for go in game_objects if go.get("IsEntity", True)
+    }
+
     stats: dict[str, int] = {}
     errors: list[str] = []
 
@@ -269,6 +320,20 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
     ) -> None:
         t0 = time.perf_counter()
         try:
+            skip = peek_skip_build_reason(site, title, WIKI_BOT_USER, FORCE_OVERWRITE)
+            if skip:
+                t1 = time.perf_counter()
+                stats[skip] = stats.get(skip, 0) + 1
+                log.info(
+                    "%s %s | result=%s | build=%.0fms save=%.0fms total=%.0fms",
+                    kind,
+                    title,
+                    skip,
+                    (t1 - t0) * 1000,
+                    0.0,
+                    (t1 - t0) * 1000,
+                )
+                return
             w = build()
             t1 = time.perf_counter()
             r = save(site, title, w, version, WIKI_BOT_USER, kind)
@@ -301,6 +366,16 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
                 stat_icons=stat_icons,
                 drop_tier_icons=drop_tier_icons,
                 unreleased=int(i["Id"]) in unreleased_items,
+                drop_sources=item_drop_sources.get(int(i["Id"]), []),
+                entity_id_to_go=entity_id_to_go,
+                item_name_to_id=item_name_to_id,
+                item_id_to_path=item_id_to_path,
+                item_id_to_item=item_id_to_item,
+                location_name_to_path=location_name_to_path,
+                go_name_to_id=go_name_to_id,
+                entity_id_to_path=entity_id_to_path,
+                status_effect_icons=status_effect_icons,
+                valor_icon_wikitext=valor_icon_wikitext,
             )
 
         def save_item(s, ttl, txt, ver, user, k):
@@ -322,6 +397,7 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
                 go_name_to_id,
                 entity_id_to_path,
                 entity_name_to_go=entity_name_to_go,
+                item_id_to_item=item_id_to_item,
                 difficulty_skull_icon=difficulty_skull_icon,
                 unreleased=int(l["Id"]) in unreleased_locations,
             )
@@ -346,6 +422,7 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
                 go_name_to_id,
                 entity_id_to_path,
                 location_name_to_path=location_name_to_path,
+                location_name_to_portal=location_name_to_portal,
                 entity_name_to_locations=entity_name_to_locations,
                 drop_tier_icon_parts=drop_tier_icon_parts,
                 stat_icons=stat_icons,

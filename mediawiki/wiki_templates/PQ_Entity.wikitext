@@ -1,0 +1,20 @@
+<noinclude>
+'''PQ Entity / Enemy layout''' — transcluded by enemy/entity pages. Edit to change all entity pages.
+
+Do not wrap large parameters in <code>#if</code>: ParserFunctions split on <code>|</code>, so wikitables and <code>[[…|…]]</code> inside <code>{{{loot|}}}</code> / <code>{{{attacks|}}}</code> break. The bot omits empty sections.
+</noinclude>{{{icon|}}}
+
+{{{statistics|}}}
+
+== Notes ==
+<!-- Add editor notes/history here. -->
+
+{{{found_in|}}}
+
+{{{event_biomes|}}}
+
+{{{loot|}}}
+
+{{{attacks|}}}
+
+{{{categories|}}}

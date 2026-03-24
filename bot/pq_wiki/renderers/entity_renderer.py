@@ -3,8 +3,13 @@ from __future__ import annotations
 import pywikibot
 
 from pq_wiki.renderers.shared import fmt_range, format_drop
-from pq_wiki.texture_service import upload_projectile_sprite, upload_sprite_if_possible
-from pq_wiki.wikitext_util import fmt_num, wikitable
+from pq_wiki.texture_service import upload_portal_preview, upload_projectile_sprite, upload_sprite_if_possible
+from pq_wiki.wikitext_util import (
+    defense_penetration_attack_line_html,
+    fmt_num,
+    template_invocation,
+    wikitable,
+)
 
 
 def build_entity_wikitext(
@@ -17,6 +22,7 @@ def build_entity_wikitext(
     go_name_to_id: dict[str, int],
     entity_id_to_path: dict[int, str],
     location_name_to_path: dict[str, str] | None = None,
+    location_name_to_portal: dict[str, dict] | None = None,
     entity_name_to_locations: dict[str, list[str]] | None = None,
     drop_tier_icon_parts: dict[int, dict[str, str]] | None = None,
     stat_icons: dict[str, str] | None = None,
@@ -29,172 +35,279 @@ def build_entity_wikitext(
 
     icon = upload_sprite_if_possible(site, go.get("Sprite"), version)
 
-    lines = [f"<!-- PQ bot generated {version} -->", ""]
     hp = go.get("Health")
     stats = go.get("Stats") or {}
     df = stats.get("Defense")
     if df is None:
         df = go.get("Defense")
-    if icon:
-        lines.append(icon)
-        lines.append("")
 
-    lines.append("== Notes ==")
-    lines.append("<!-- Add editor notes/history here. -->")
-    lines.append("")
-
-    found_links = []
+    found_parts: list[str] = []
     if entity_name_to_locations:
-        found_links = entity_name_to_locations.get(name, []) or []
-    if found_links:
-        lines.append("== Found in locations ==")
-        lines.append(", ".join(found_links))
-        lines.append("")
+        for loc_name in entity_name_to_locations.get(str(name), []) or []:
+            found_parts.append(
+                _found_in_location_cell(
+                    site,
+                    str(loc_name),
+                    version,
+                    location_name_to_path,
+                    location_name_to_portal,
+                )
+            )
+    if found_parts:
+        found_in_str = "== Found in locations ==\n" + ", ".join(found_parts)
+    else:
+        found_in_str = ""
 
     event_biomes = go.get("EventBiomes") or []
     if event_biomes:
-        lines.append("== Event biomes ==")
-        lines.append(", ".join(_link_location_name(str(b), location_name_to_path) for b in event_biomes))
-        lines.append("")
+        event_biomes_str = "== Event biomes ==\n" + ", ".join(
+            _link_location_name(str(b), location_name_to_path) for b in event_biomes
+        )
+    else:
+        event_biomes_str = ""
 
-    lines.append("== Statistics ==")
     exp = go.get("ExperienceValue") or {}
     st_rows = [
         (f"{_stat_icon('Health', stat_icons)} Health".strip(), f"{fmt_num(hp)} HP"),
         (f"{_stat_icon('Defense', stat_icons)} Defense".strip(), fmt_num(df)),
         ("Experience", fmt_range(exp.get("Min"), exp.get("Max"))),
     ]
-    lines.append(wikitable(st_rows))
-    lines.append("")
+    imm_txt = _format_immunities(go.get("Immunity"), status_effect_icons)
+    if imm_txt:
+        st_rows.append(("Immunity", imm_txt))
+    statistics_table = wikitable(st_rows)
 
     private_drops = go.get("PrivateDrops") or []
     public_drops = go.get("PublicDrops") or []
     drops = [*private_drops, *public_drops]
-    if drops:
-        lines.append("== Loot ==")
-        lines.append('{| class="wikitable"')
-        lines.append("! Drop Type")
-        lines.append("! Drop")
-        normalized = _normalize_enemy_drops(drops, item_name_to_id, item_id_to_item)
-        groups: dict[int, list[dict]] = {}
-        for nd in normalized:
-            tier = int(nd.get("drop_tier_type") or 0)
-            groups.setdefault(tier, []).append(nd)
-        is_boss = bool(
-            go.get("IsBiomeBoss")
-            or go.get("IsTroomBoss")
-            or go.get("IsDungeonBoss")
-            or go.get("IsWorldBoss")
-        )
-        for tier in sorted(groups.keys(), reverse=True):
-            entries = sorted(
-                groups[tier],
-                key=lambda x: (
-                    -int(x.get("tier_sort_value") or 0),
-                    str(x.get("type_label") or ""),
-                    str(x.get("name") or ""),
-                ),
-            )
-            rendered_rows: list[str] = []
-            for nd in entries:
-                body = _render_normalized_enemy_drop_entry(
-                    site,
-                    nd,
-                    version,
-                    item_id_to_path,
-                    item_id_to_item,
-                )
-                if not body:
-                    continue
-                rendered_rows.append(str(body).replace("\n", "<br>"))
-            if not rendered_rows:
-                continue
-            rowspan = len(rendered_rows)
-            group_icon = ""
-            if drop_tier_icon_parts and tier in drop_tier_icon_parts:
-                part = "chest" if is_boss else "bag"
-                group_icon = drop_tier_icon_parts[tier].get(part, "")
-            for i, drop_text in enumerate(rendered_rows):
-                lines.append("|-")
-                if i == 0:
-                    lines.append(f'| rowspan="{rowspan}" valign="middle" style="text-align:center;" | {group_icon}')
-                lines.append(f"| {drop_text}")
-        if not groups:
-            for d in drops:
-                lines.append("|-")
-                lines.append('| valign="middle" style="text-align:center;" | ')
-                lines.append(f"| {format_drop(d, item_name_to_id, item_id_to_path, go_name_to_id)}")
-        lines.append("|}")
-        lines.append("")
+    loot_block = _build_loot_section_wikitext(
+        site,
+        go,
+        drops,
+        version,
+        item_name_to_id,
+        item_id_to_path,
+        item_id_to_item,
+        go_name_to_id,
+        drop_tier_icon_parts,
+    )
 
     projs = go.get("ProjectileDescriptors") or []
-    if projs:
-        lines.append("== Attacks ==")
-        lines.append('{| class="wikitable" style="text-align:center;"')
-        lines.append("! Image")
-        lines.append("! Damage")
-        lines.append("! Status effects")
-        lines.append("! Range (tiles)")
-        lines.append("! Speed (tiles/sec)")
-        lines.append("! Other")
-        for p in projs:
-            pw = _attack_image_for_projectile(site, p, version)
-            dmg = p.get("Damage") or {}
-            speed = p.get("Speed")
-            range_txt = ""
-            is_aoe = False
-            try:
-                is_aoe = float(p.get("RadiusOfEffect") or 0) > 0
-            except (TypeError, ValueError):
-                is_aoe = False
-            if not is_aoe and p.get("Range") is not None:
-                try:
-                    if float(p.get("Range")) > 0:
-                        range_txt = f"{fmt_num(p.get('Range'))}"
-                except (TypeError, ValueError):
-                    range_txt = f"{fmt_num(p.get('Range'))}"
-            speed_txt = ""
-            other: list[str] = []
-            if is_aoe:
-                try:
-                    aoe_tiles = float(p.get("RadiusOfEffect") or 0) / 50.0
-                    if aoe_tiles > 0:
-                        other.append(f"AOE Radius {fmt_num(aoe_tiles)} tiles")
-                except (TypeError, ValueError):
-                    pass
-            if speed is not None:
-                try:
-                    if float(speed) >= 0.1:
-                        speed_txt = fmt_num(speed)
-                except (TypeError, ValueError):
-                    speed_txt = fmt_num(speed)
-            if p.get("DefensePenetration") is not None:
-                try:
-                    dp = float(p.get("DefensePenetration"))
-                    if dp == 1:
-                        other.append("Ignores Defense")
-                    elif dp > 0:
-                        other.append(f"Def-Pen {fmt_num(p.get('DefensePenetration'))}")
-                except (TypeError, ValueError):
-                    pass
-            if (p.get("MaxHitsPerEntity") or 0) > 1:
-                other.append(f"Multi-hit {fmt_num(p.get('MaxHitsPerEntity'))}")
-            if p.get("Pierces"):
-                other.append("Pierces")
+    attacks_block = _build_attacks_section_wikitext(site, projs, version, status_effect_icons)
 
-            lines.append("|-")
-            lines.append(f'| <div style="text-align:center">{pw}</div>')
-            lines.append(f"| '''{fmt_range(dmg.get('Min'), dmg.get('Max'))}'''")
-            lines.append(f"| {_format_status_effects(p.get('StatusEffects'), status_effect_icons)}")
-            lines.append(f"| {range_txt}")
-            lines.append(f"| {speed_txt}")
-            lines.append(f"| {'<br>'.join(other)}")
-        lines.append("|}")
-        lines.append("")
-
-    lines.append("[[Category:Enemies]]" if hostile else "[[Category:Entities]]")
+    cat_lines = ["[[Category:Enemies]]" if hostile else "[[Category:Entities]]"]
     if unreleased:
-        lines.append("[[Category:Unreleased]]")
+        cat_lines.append("[[Category:Unreleased]]")
+    categories_block = "\n".join(cat_lines)
+
+    body = template_invocation(
+        "PQ Entity",
+        [
+            ("icon", icon),
+            ("found_in", found_in_str),
+            ("event_biomes", event_biomes_str),
+            ("statistics", statistics_table),
+            ("loot", loot_block),
+            ("attacks", attacks_block),
+            ("categories", categories_block),
+        ],
+    )
+    return f"<!-- PQ bot generated {version} -->{body}"
+
+
+_LOOT_DROP_ROWS_PER_SUBCOLUMN = 5
+
+
+def _layout_drops_multicolumn(
+    rendered_rows: list[str],
+    max_per_col: int = _LOOT_DROP_ROWS_PER_SUBCOLUMN,
+    inner_table_width: str = "100%",
+) -> str:
+    """
+    Stack drops in sub-columns: at most max_per_col rows per column, then more columns to the right.
+
+    Uses HTML <table> (not nested wikitext {|) so layout survives inside {{PQ Entity|loot=…}}
+    where | is escaped as {{!}} — nested {|…|} breaks after escaping.
+    """
+    if not rendered_rows:
+        return ""
+    if len(rendered_rows) <= max_per_col:
+        return "<br>".join(rendered_rows)
+    cols: list[str] = []
+    for i in range(0, len(rendered_rows), max_per_col):
+        cols.append("<br>".join(rendered_rows[i : i + max_per_col]))
+    tds: list[str] = []
+    for ci, col_text in enumerate(cols):
+        if ci > 0:
+            td_style = (
+                "vertical-align:top; border:none; border-left:1px solid #a7a7a7; "
+                "padding-left:10px;"
+            )
+        else:
+            td_style = "vertical-align:top; border:none; padding-right:6px;"
+        tds.append(f'<td style="{td_style}">{col_text}</td>')
+    tbl_style = (
+        f"width:{inner_table_width}; border-collapse:collapse; border:none; "
+        "background:transparent; margin:0;"
+    )
+    return (
+        f'<table role="presentation" style="{tbl_style}"><tr>'
+        + "".join(tds)
+        + "</tr></table>"
+    )
+
+
+def _build_loot_section_wikitext(
+    site: pywikibot.Site,
+    go: dict,
+    drops: list,
+    version: str,
+    item_name_to_id: dict[str, int],
+    item_id_to_path: dict[int, str],
+    item_id_to_item: dict[int, dict] | None,
+    go_name_to_id: dict[str, int],
+    drop_tier_icon_parts: dict[int, dict[str, str]] | None,
+) -> str:
+    if not drops:
+        return ""
+    lines: list[str] = ["== Loot ==", '{| class="wikitable"', "! Drop Type", "! Drop"]
+    normalized = _normalize_enemy_drops(drops, item_name_to_id, item_id_to_item)
+    groups: dict[int, list[dict]] = {}
+    for nd in normalized:
+        tier = int(nd.get("drop_tier_type") or 0)
+        groups.setdefault(tier, []).append(nd)
+    is_boss = bool(
+        go.get("IsBiomeBoss")
+        or go.get("IsTroomBoss")
+        or go.get("IsDungeonBoss")
+        or go.get("IsWorldBoss")
+    )
+    for tier in sorted(groups.keys(), reverse=True):
+        entries = sorted(
+            groups[tier],
+            key=lambda x: (
+                -int(x.get("tier_sort_value") or 0),
+                str(x.get("type_label") or ""),
+                str(x.get("name") or ""),
+            ),
+        )
+        rendered_rows: list[str] = []
+        for nd in entries:
+            body = _render_normalized_enemy_drop_entry(
+                site,
+                nd,
+                version,
+                item_id_to_path,
+                item_id_to_item,
+            )
+            if not body:
+                continue
+            rendered_rows.append(str(body).replace("\n", "<br>"))
+        if not rendered_rows:
+            continue
+        group_icon = ""
+        if drop_tier_icon_parts and tier in drop_tier_icon_parts:
+            part = "chest" if is_boss else "bag"
+            group_icon = drop_tier_icon_parts[tier].get(part, "")
+        drop_cell = _layout_drops_multicolumn(rendered_rows)
+        lines.append("|-")
+        lines.append(f'| valign="middle" style="text-align:center;" | {group_icon}')
+        lines.append(f"| {drop_cell}")
+    if not groups:
+        for d in drops:
+            lines.append("|-")
+            lines.append('| valign="middle" style="text-align:center;" | ')
+            lines.append(f"| {format_drop(d, item_name_to_id, item_id_to_path, go_name_to_id)}")
+    lines.append("|}")
+    return "\n".join(lines)
+
+
+def _build_attacks_section_wikitext(
+    site: pywikibot.Site,
+    projs: list,
+    version: str,
+    status_effect_icons: dict[str, str] | None,
+) -> str:
+    if not projs:
+        return ""
+    attack_rows: list[dict[str, str]] = []
+    has_status = False
+    has_other = False
+    for p in projs:
+        pw = _attack_image_for_projectile(site, p, version)
+        dmg = p.get("Damage") or {}
+        speed = p.get("Speed")
+        range_txt = ""
+        is_aoe = False
+        try:
+            is_aoe = float(p.get("RadiusOfEffect") or 0) > 0
+        except (TypeError, ValueError):
+            is_aoe = False
+        if not is_aoe and p.get("Range") is not None:
+            try:
+                if float(p.get("Range")) >= 0.1:
+                    range_txt = fmt_num(p.get("Range"))
+            except (TypeError, ValueError):
+                range_txt = fmt_num(p.get("Range"))
+        speed_txt = ""
+        other: list[str] = []
+        if is_aoe:
+            try:
+                aoe_tiles = float(p.get("RadiusOfEffect") or 0) / 50.0
+                if aoe_tiles > 0:
+                    other.append(f"AOE Radius {fmt_num(aoe_tiles)} tiles")
+            except (TypeError, ValueError):
+                pass
+        if speed is not None:
+            try:
+                if float(speed) >= 0.1:
+                    speed_txt = fmt_num(speed)
+            except (TypeError, ValueError):
+                speed_txt = fmt_num(speed)
+        if p.get("DefensePenetration") is not None:
+            line = defense_penetration_attack_line_html(p.get("DefensePenetration"))
+            if line:
+                other.append(line)
+        if (p.get("MaxHitsPerEntity") or 0) > 1:
+            other.append(f"Multi-hit {fmt_num(p.get('MaxHitsPerEntity'))}")
+        if p.get("Pierces"):
+            other.append("Pierces")
+        status_txt = _format_status_effects(p.get("StatusEffects"), status_effect_icons)
+        other_txt = "<br>".join(other)
+        has_status = has_status or bool(status_txt)
+        has_other = has_other or bool(other_txt)
+        attack_rows.append({
+            "image": f'<div style="text-align:center">{pw}</div>',
+            "damage": f"'''{fmt_range(dmg.get('Min'), dmg.get('Max'))}'''",
+            "range": range_txt,
+            "speed": speed_txt,
+            "status": status_txt,
+            "other": other_txt,
+        })
+
+    lines: list[str] = [
+        "== Attacks ==",
+        '{| class="wikitable" style="text-align:center;"',
+        "! Image",
+        "! Damage",
+        "! Range (tiles)",
+        "! Speed (tiles/sec)",
+    ]
+    if has_status:
+        lines.append("! Status effects")
+    if has_other:
+        lines.append("! Other")
+    for row in attack_rows:
+        lines.append("|-")
+        lines.append(f"| {row['image']}")
+        lines.append(f"| {row['damage']}")
+        lines.append(f"| {row['range']}")
+        lines.append(f"| {row['speed']}")
+        if has_status:
+            lines.append(f"| {row['status']}")
+        if has_other:
+            lines.append(f"| {row['other']}")
+    lines.append("|}")
     return "\n".join(lines)
 
 
@@ -202,6 +315,41 @@ def _stat_icon(name: str, stat_icons: dict[str, str] | None) -> str:
     if not stat_icons:
         return ""
     return stat_icons.get(name.lower(), "")
+
+
+# Game data may still send Intensity for these; it is not used in-game — show duration only in the wiki.
+_STATUS_EFFECTS_OMIT_INTENSITY = frozenset({
+    "INVULNERABLE",
+    "ARMOR_BROKEN",
+    "SLOWED",
+    "ARMORED",
+    "SICK",
+    "PARALYZE",
+    "QUIET",
+    "STUNNED",
+})
+
+
+def _status_effect_name_key(name: object) -> str:
+    return str(name).strip().upper().replace(" ", "_")
+
+
+def _format_immunities(raw: object, icon_map: dict[str, str] | None) -> str:
+    """List immune status effects with icons (dump: Immunity: { \"Bleeding\": true, ... } or [])."""
+    if raw is None:
+        return ""
+    if isinstance(raw, list):
+        return ""
+    if not isinstance(raw, dict):
+        return ""
+    names = sorted(str(k) for k, v in raw.items() if v)
+    if not names:
+        return ""
+    parts: list[str] = []
+    for n in names:
+        icon = _status_icon(n, icon_map)
+        parts.append(f"{icon} {n}".strip())
+    return "<br>".join(parts)
 
 
 def _format_status_effects(raw: object, icon_map: dict[str, str] | None) -> str:
@@ -213,7 +361,8 @@ def _format_status_effects(raw: object, icon_map: dict[str, str] | None) -> str:
             icon = _status_icon(str(name), icon_map)
             if isinstance(spec, dict):
                 parts = []
-                if spec.get("Intensity") is not None:
+                omit_intensity = _status_effect_name_key(name) in _STATUS_EFFECTS_OMIT_INTENSITY
+                if not omit_intensity and spec.get("Intensity") is not None:
                     parts.append(f"intensity {fmt_num(spec.get('Intensity'))}")
                 if spec.get("Duration") is not None:
                     parts.append(f"duration {fmt_num(spec.get('Duration'))}s")
@@ -325,7 +474,7 @@ def _render_enemy_drop_entry(
         chunks: list[str] = []
         group_label = _item_group_label(val)
         if group_label:
-            chunks.append(f"'''{group_label}'''")
+            chunks.append(_item_group_category_link_wikitext(group_label))
         icons: list[str] = []
         for iid in preview[:3]:
             it = item_id_to_item[iid] if item_id_to_item and iid in item_id_to_item else None
@@ -401,6 +550,16 @@ def _resolve_item_group_item_ids(
     return deduped
 
 
+def _item_group_category_link_wikitext(group_name: str) -> str:
+    """Bold label linking to Category:Type Tier (e.g. Primary Weapon T6) without categorizing the page."""
+    g = str(group_name).strip()
+    if not g:
+        return ""
+    if "|" in g or "\n" in g or "]]" in g:
+        return f"'''{g}'''"
+    return f"'''[[:Category:{g}|{g}]]'''"
+
+
 def _item_group_label(val: object) -> str:
     if isinstance(val, list):
         if len(val) >= 2 and all(isinstance(x, str) for x in val):
@@ -423,6 +582,29 @@ def _link_image_wikitext(img_wiki: str, page_path: str) -> str:
     if i == -1:
         return img_wiki
     return f"{img_wiki[:i]}|link={page_path}{img_wiki[i:]}"
+
+
+def _found_in_location_cell(
+    site: pywikibot.Site,
+    loc_name: str,
+    version: str,
+    location_name_to_path: dict[str, str] | None,
+    location_name_to_portal: dict[str, dict] | None,
+) -> str:
+    link = _link_location_name(loc_name, location_name_to_path)
+    portal = None
+    if location_name_to_portal:
+        portal = location_name_to_portal.get(loc_name)
+    pimg = upload_portal_preview(site, portal, version) if portal else ""
+    path = location_name_to_path.get(loc_name) if location_name_to_path else None
+    if pimg and path:
+        pimg = _link_image_wikitext(pimg, path)
+    if pimg:
+        return (
+            '<span style="display:inline-flex; align-items:center; gap:8px;">'
+            f"{pimg} {link}</span>"
+        )
+    return link
 
 
 def _link_location_name(name: str, location_name_to_path: dict[str, str] | None) -> str:
@@ -568,7 +750,7 @@ def _render_normalized_enemy_drop_entry(
         chunks: list[str] = []
         nm = str(nd.get("name") or "")
         if nm:
-            chunks.append(f"'''{nm}'''")
+            chunks.append(_item_group_category_link_wikitext(nm))
         icons: list[str] = []
         for iid in nd.get("preview_item_ids") or []:
             it = item_id_to_item[iid] if item_id_to_item and iid in item_id_to_item else None
