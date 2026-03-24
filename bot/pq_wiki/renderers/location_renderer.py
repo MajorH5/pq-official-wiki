@@ -42,6 +42,7 @@ def build_location_wikitext(
 
     d = _location_difficulty_int(loc.get("Difficulty"))
     portal_rows: list[tuple[str, str]] = [
+        ("Id", fmt_num(lid)),
         ("Teleportation", "Yes" if loc.get("TeleportationEnabled") else "No"),
     ]
     if d > 0:

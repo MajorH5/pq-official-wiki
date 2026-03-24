@@ -85,6 +85,7 @@ def build_item_wikitext(
 
     info_rows = [
         ("Type", type_hierarchy_links(hier)),
+        ("Id", fmt_num(item.get("Id"))),
         ("Tradable", "Yes" if item.get("IsTradable") else "No"),
         ("Drop Type", drop_tier_wikitext or fmt_num(item.get("DropTierType"))),
     ]

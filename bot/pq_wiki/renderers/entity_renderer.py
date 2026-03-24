@@ -67,11 +67,15 @@ def build_entity_wikitext(
         event_biomes_str = ""
 
     exp = go.get("ExperienceValue") or {}
-    st_rows = [
-        (f"{_stat_icon('Health', stat_icons)} Health".strip(), f"{fmt_num(hp)} HP"),
-        (f"{_stat_icon('Defense', stat_icons)} Defense".strip(), fmt_num(df)),
-        ("Experience", fmt_range(exp.get("Min"), exp.get("Max"))),
-    ]
+    st_rows: list[tuple[str, str]] = [("Id", fmt_num(gid))]
+    if hostile:
+        st_rows.extend(
+            [
+                (f"{_stat_icon('Health', stat_icons)} Health".strip(), f"{fmt_num(hp)} HP"),
+                (f"{_stat_icon('Defense', stat_icons)} Defense".strip(), fmt_num(df)),
+                ("Experience", fmt_range(exp.get("Min"), exp.get("Max"))),
+            ]
+        )
     imm_txt = _format_immunities(go.get("Immunity"), status_effect_icons)
     if imm_txt:
         st_rows.append(("Immunity", imm_txt))
@@ -95,7 +99,10 @@ def build_entity_wikitext(
     projs = go.get("ProjectileDescriptors") or []
     attacks_block = _build_attacks_section_wikitext(site, projs, version, status_effect_icons)
 
-    cat_lines = ["[[Category:Enemies]]" if hostile else "[[Category:Entities]]"]
+    if hostile:
+        cat_lines = ["[[Category:Enemies]]"]
+    else:
+        cat_lines = ["[[Category:Entities]]", "[[Category:Friendlies]]"]
     if unreleased:
         cat_lines.append("[[Category:Unreleased]]")
     categories_block = "\n".join(cat_lines)
