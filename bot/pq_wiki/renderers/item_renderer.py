@@ -200,9 +200,15 @@ def build_item_wikitext(
                         ws_rows.append(("Speed", f"{fmt_num(speed)} tiles/sec"))
                 except (TypeError, ValueError):
                     ws_rows.append(("Speed", f"{fmt_num(speed)} tiles/sec"))
+            rof = proj.get("RateOfFire")
+            try:
+                if rof is not None and float(rof) != 0.0:
+                    ws_rows.append(("Rate of fire", f"{fmt_num(rof)} shots/sec"))
+            except (TypeError, ValueError):
+                if rof is not None:
+                    ws_rows.append(("Rate of fire", f"{fmt_num(rof)} shots/sec"))
             ws_rows.extend(
                 [
-                    ("Rate of fire", f"{fmt_num(proj.get('RateOfFire'))} shots/sec"),
                     ("Total projectiles", fmt_num(proj.get("TotalProjectiles"))),
                     ("Projectile lifetime", f"{fmt_num(proj.get('ProjectileLifetime'))} sec"),
                     ("Pierces", "Yes" if proj.get("Pierces") else "No"),
@@ -216,6 +222,12 @@ def build_item_wikitext(
                     ws_rows.append(("Defense penetration", dp_cell))
             if (proj.get("MaxHitsPerEntity") or 0) > 1:
                 ws_rows.append(("Multi-hit", fmt_num(proj.get("MaxHitsPerEntity"))))
+        if "Secondary Ability" in hier_set and item.get("Cooldown") is not None:
+            try:
+                cd = float(item["Cooldown"])
+                ws_rows.append(("Cooldown", f"{fmt_num(cd)} sec"))
+            except (TypeError, ValueError):
+                pass
         wparts.append(wikitable(ws_rows))
         weapon_block = "\n".join(wparts)
 
@@ -323,12 +335,13 @@ def _append_numeric_and_commerce_rows(
             info_rows.append(("Robux price", fmt_num(rp)))
     except (TypeError, ValueError):
         pass
-    sl = item.get("StackLimit")
-    try:
-        if sl is not None and float(sl) > 0:
-            info_rows.append(("Stack limit", fmt_num(sl)))
-    except (TypeError, ValueError):
-        pass
+    if "IsStackable" in item:
+        sl = item.get("StackLimit")
+        try:
+            if sl is not None and float(sl) > 0:
+                info_rows.append(("Stack limit", fmt_num(sl)))
+        except (TypeError, ValueError):
+            pass
     vp = item.get("ValorPrice")
     try:
         if vp is not None and float(vp) > 0:
@@ -635,7 +648,13 @@ def _append_type_specific_rows(
             try:
                 uid = int(rid)
                 url = f"https://www.roblox.com/users/{uid}/profile"
-                info_rows.append(("Recipient", f"[{url} Roblox profile ({uid})]"))
+                info_rows.append(
+                    (
+                        "Recipient",
+                        f'<a href="{url}" class="external" target="_blank" rel="noopener noreferrer">'
+                        f"Roblox profile ({uid})</a>",
+                    ),
+                )
             except (TypeError, ValueError):
                 pass
     if "Object Spawner" in hier_set:
