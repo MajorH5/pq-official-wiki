@@ -1,0 +1,614 @@
+from __future__ import annotations
+
+import pywikibot
+
+from pq_wiki.renderers.shared import fmt_range, format_drop
+from pq_wiki.texture_service import upload_projectile_sprite, upload_sprite_if_possible
+from pq_wiki.wikitext_util import fmt_num, wikitable
+
+
+def build_entity_wikitext(
+    site: pywikibot.Site,
+    go: dict,
+    version: str,
+    item_name_to_id: dict[str, int],
+    item_id_to_path: dict[int, str],
+    item_id_to_item: dict[int, dict] | None,
+    go_name_to_id: dict[str, int],
+    entity_id_to_path: dict[int, str],
+    location_name_to_path: dict[str, str] | None = None,
+    entity_name_to_locations: dict[str, list[str]] | None = None,
+    drop_tier_icon_parts: dict[int, dict[str, str]] | None = None,
+    stat_icons: dict[str, str] | None = None,
+    status_effect_icons: dict[str, str] | None = None,
+    unreleased: bool = False,
+) -> str:
+    gid = go["Id"]
+    name = go.get("Name", f"Entity {gid}")
+    hostile = go.get("IsHostile")
+
+    icon = upload_sprite_if_possible(site, go.get("Sprite"), version)
+
+    lines = [f"<!-- PQ bot generated {version} -->", ""]
+    hp = go.get("Health")
+    stats = go.get("Stats") or {}
+    df = stats.get("Defense")
+    if df is None:
+        df = go.get("Defense")
+    if icon:
+        lines.append(icon)
+        lines.append("")
+
+    lines.append("== Notes ==")
+    lines.append("<!-- Add editor notes/history here. -->")
+    lines.append("")
+
+    found_links = []
+    if entity_name_to_locations:
+        found_links = entity_name_to_locations.get(name, []) or []
+    if found_links:
+        lines.append("== Found in locations ==")
+        lines.append(", ".join(found_links))
+        lines.append("")
+
+    event_biomes = go.get("EventBiomes") or []
+    if event_biomes:
+        lines.append("== Event biomes ==")
+        lines.append(", ".join(_link_location_name(str(b), location_name_to_path) for b in event_biomes))
+        lines.append("")
+
+    lines.append("== Statistics ==")
+    exp = go.get("ExperienceValue") or {}
+    st_rows = [
+        (f"{_stat_icon('Health', stat_icons)} Health".strip(), f"{fmt_num(hp)} HP"),
+        (f"{_stat_icon('Defense', stat_icons)} Defense".strip(), fmt_num(df)),
+        ("Experience", fmt_range(exp.get("Min"), exp.get("Max"))),
+    ]
+    lines.append(wikitable(st_rows))
+    lines.append("")
+
+    private_drops = go.get("PrivateDrops") or []
+    public_drops = go.get("PublicDrops") or []
+    drops = [*private_drops, *public_drops]
+    if drops:
+        lines.append("== Loot ==")
+        lines.append('{| class="wikitable"')
+        lines.append("! Drop Type")
+        lines.append("! Drop")
+        normalized = _normalize_enemy_drops(drops, item_name_to_id, item_id_to_item)
+        groups: dict[int, list[dict]] = {}
+        for nd in normalized:
+            tier = int(nd.get("drop_tier_type") or 0)
+            groups.setdefault(tier, []).append(nd)
+        is_boss = bool(
+            go.get("IsBiomeBoss")
+            or go.get("IsTroomBoss")
+            or go.get("IsDungeonBoss")
+            or go.get("IsWorldBoss")
+        )
+        for tier in sorted(groups.keys(), reverse=True):
+            entries = sorted(
+                groups[tier],
+                key=lambda x: (
+                    -int(x.get("tier_sort_value") or 0),
+                    str(x.get("type_label") or ""),
+                    str(x.get("name") or ""),
+                ),
+            )
+            rendered_rows: list[str] = []
+            for nd in entries:
+                body = _render_normalized_enemy_drop_entry(
+                    site,
+                    nd,
+                    version,
+                    item_id_to_path,
+                    item_id_to_item,
+                )
+                if not body:
+                    continue
+                rendered_rows.append(str(body).replace("\n", "<br>"))
+            if not rendered_rows:
+                continue
+            rowspan = len(rendered_rows)
+            group_icon = ""
+            if drop_tier_icon_parts and tier in drop_tier_icon_parts:
+                part = "chest" if is_boss else "bag"
+                group_icon = drop_tier_icon_parts[tier].get(part, "")
+            for i, drop_text in enumerate(rendered_rows):
+                lines.append("|-")
+                if i == 0:
+                    lines.append(f'| rowspan="{rowspan}" valign="middle" style="text-align:center;" | {group_icon}')
+                lines.append(f"| {drop_text}")
+        if not groups:
+            for d in drops:
+                lines.append("|-")
+                lines.append('| valign="middle" style="text-align:center;" | ')
+                lines.append(f"| {format_drop(d, item_name_to_id, item_id_to_path, go_name_to_id)}")
+        lines.append("|}")
+        lines.append("")
+
+    projs = go.get("ProjectileDescriptors") or []
+    if projs:
+        lines.append("== Attacks ==")
+        lines.append('{| class="wikitable" style="text-align:center;"')
+        lines.append("! Image")
+        lines.append("! Damage")
+        lines.append("! Status effects")
+        lines.append("! Range (tiles)")
+        lines.append("! Speed (tiles/sec)")
+        lines.append("! Other")
+        for p in projs:
+            pw = _attack_image_for_projectile(site, p, version)
+            dmg = p.get("Damage") or {}
+            speed = p.get("Speed")
+            range_txt = ""
+            is_aoe = False
+            try:
+                is_aoe = float(p.get("RadiusOfEffect") or 0) > 0
+            except (TypeError, ValueError):
+                is_aoe = False
+            if not is_aoe and p.get("Range") is not None:
+                try:
+                    if float(p.get("Range")) > 0:
+                        range_txt = f"{fmt_num(p.get('Range'))}"
+                except (TypeError, ValueError):
+                    range_txt = f"{fmt_num(p.get('Range'))}"
+            speed_txt = ""
+            other: list[str] = []
+            if is_aoe:
+                try:
+                    aoe_tiles = float(p.get("RadiusOfEffect") or 0) / 50.0
+                    if aoe_tiles > 0:
+                        other.append(f"AOE Radius {fmt_num(aoe_tiles)} tiles")
+                except (TypeError, ValueError):
+                    pass
+            if speed is not None:
+                try:
+                    if float(speed) >= 0.1:
+                        speed_txt = fmt_num(speed)
+                except (TypeError, ValueError):
+                    speed_txt = fmt_num(speed)
+            if p.get("DefensePenetration") is not None:
+                try:
+                    dp = float(p.get("DefensePenetration"))
+                    if dp == 1:
+                        other.append("Ignores Defense")
+                    elif dp > 0:
+                        other.append(f"Def-Pen {fmt_num(p.get('DefensePenetration'))}")
+                except (TypeError, ValueError):
+                    pass
+            if (p.get("MaxHitsPerEntity") or 0) > 1:
+                other.append(f"Multi-hit {fmt_num(p.get('MaxHitsPerEntity'))}")
+            if p.get("Pierces"):
+                other.append("Pierces")
+
+            lines.append("|-")
+            lines.append(f'| <div style="text-align:center">{pw}</div>')
+            lines.append(f"| '''{fmt_range(dmg.get('Min'), dmg.get('Max'))}'''")
+            lines.append(f"| {_format_status_effects(p.get('StatusEffects'), status_effect_icons)}")
+            lines.append(f"| {range_txt}")
+            lines.append(f"| {speed_txt}")
+            lines.append(f"| {'<br>'.join(other)}")
+        lines.append("|}")
+        lines.append("")
+
+    lines.append("[[Category:Enemies]]" if hostile else "[[Category:Entities]]")
+    if unreleased:
+        lines.append("[[Category:Unreleased]]")
+    return "\n".join(lines)
+
+
+def _stat_icon(name: str, stat_icons: dict[str, str] | None) -> str:
+    if not stat_icons:
+        return ""
+    return stat_icons.get(name.lower(), "")
+
+
+def _format_status_effects(raw: object, icon_map: dict[str, str] | None) -> str:
+    if not raw:
+        return ""
+    if isinstance(raw, dict):
+        out: list[str] = []
+        for name, spec in raw.items():
+            icon = _status_icon(str(name), icon_map)
+            if isinstance(spec, dict):
+                parts = []
+                if spec.get("Intensity") is not None:
+                    parts.append(f"intensity {fmt_num(spec.get('Intensity'))}")
+                if spec.get("Duration") is not None:
+                    parts.append(f"duration {fmt_num(spec.get('Duration'))}s")
+                if parts:
+                    out.append(f"{icon} {name} ({', '.join(parts)})".strip())
+                else:
+                    out.append(f"{icon} {name}".strip())
+            else:
+                out.append(f"{icon} {name}: {spec}".strip())
+        return "<br>".join(out)
+    if isinstance(raw, list):
+        out: list[str] = []
+        for e in raw:
+            if isinstance(e, dict):
+                n = e.get("Name") or e.get("Type") or e.get("Effect")
+                if n:
+                    icon = _status_icon(str(n), icon_map)
+                    out.append(f"{icon} {n}".strip())
+                else:
+                    out.append(str(e))
+            else:
+                icon = _status_icon(str(e), icon_map)
+                out.append(f"{icon} {e}".strip())
+        return ", ".join(out)
+    return str(raw)
+
+
+def _attack_image_for_projectile(site: pywikibot.Site, p: dict, version: str) -> str:
+    radius = p.get("RadiusOfEffect")
+    try:
+        if radius is not None and float(radius) > 0:
+            return _aoe_marker(p.get("Color"))
+    except (TypeError, ValueError):
+        pass
+    ps = p.get("Sprite")
+    return upload_projectile_sprite(site, ps, version, max_thumb_size=90) if ps else ""
+
+
+def _aoe_marker(color: object) -> str:
+    r = g = b = 128
+    if isinstance(color, dict):
+        try:
+            r = int(color.get("R", r))
+            g = int(color.get("G", g))
+            b = int(color.get("B", b))
+        except (TypeError, ValueError):
+            r = g = b = 128
+    style = (
+        "display:inline-flex;align-items:center;gap:6px;"
+    )
+    dot = (
+        f'<span style="display:inline-block;width:18px;height:18px;'
+        f'border-radius:50%;background:rgb({r},{g},{b});border:1px solid #222"></span>'
+    )
+    return f'<span style="{style}">{dot}<span>(AOE)</span></span>'
+
+
+def _status_icon(name: str, icon_map: dict[str, str] | None) -> str:
+    if not icon_map:
+        return ""
+    return icon_map.get(name.lower(), "")
+
+
+def _drop_icon_for_entry(
+    drop: dict,
+    is_boss: bool,
+    drop_tier_icon_parts: dict[int, dict[str, str]] | None,
+    item_name_to_id: dict[str, int],
+    item_id_to_item: dict[int, dict] | None,
+) -> str:
+    tier = 0
+    dt = drop.get("DropType")
+    val = drop.get("Value")
+    if dt == "Item" and isinstance(val, str):
+        iid = item_name_to_id.get(val)
+        if iid and item_id_to_item and iid in item_id_to_item:
+            tier = int(item_id_to_item[iid].get("DropTierType") or 0)
+    if drop_tier_icon_parts and tier in drop_tier_icon_parts:
+        part = "chest" if is_boss else "bag"
+        return drop_tier_icon_parts[tier].get(part, "")
+    return ""
+
+
+def _render_enemy_drop_entry(
+    site: pywikibot.Site,
+    drop: dict,
+    version: str,
+    item_name_to_id: dict[str, int],
+    item_id_to_path: dict[int, str],
+    item_id_to_item: dict[int, dict] | None,
+) -> str:
+    dt = drop.get("DropType")
+    val = drop.get("Value")
+    if dt == "Item" and isinstance(val, str):
+        iid = item_name_to_id.get(val)
+        if iid:
+            path = item_id_to_path.get(iid)
+            it = item_id_to_item.get(iid) if item_id_to_item else None
+            icon = ""
+            if it:
+                icon = upload_sprite_if_possible(site, it.get("Sprite"), version, thumb_size=40)
+                if icon and path:
+                    icon = _link_image_wikitext(icon, path)
+            label = f"[[{path}|{val}]]" if path else val
+            return f"{icon} {label}".strip()
+        return str(val)
+    if dt == "ItemGroup":
+        preview = _resolve_item_group_preview_items(val, item_name_to_id, item_id_to_item)
+        chunks: list[str] = []
+        group_label = _item_group_label(val)
+        if group_label:
+            chunks.append(f"'''{group_label}'''")
+        icons: list[str] = []
+        for iid in preview[:3]:
+            it = item_id_to_item[iid] if item_id_to_item and iid in item_id_to_item else None
+            if not it:
+                continue
+            nm = str(it.get("Name") or f"Item {iid}")
+            path = item_id_to_path.get(iid)
+            icon = upload_sprite_if_possible(site, it.get("Sprite"), version, thumb_size=40)
+            if icon and path:
+                icon = _link_image_wikitext(icon, path)
+            if icon:
+                icons.append(icon)
+            else:
+                label = f"[[{path}|{nm}]]" if path else nm
+                icons.append(label)
+        if icons:
+            chunks.append(" ".join(icons))
+        if chunks:
+            return "<br>".join(chunks)
+    # fallback
+    return ""
+
+
+def _resolve_item_group_preview_items(
+    val: object,
+    item_name_to_id: dict[str, int],
+    item_id_to_item: dict[int, dict] | None,
+) -> list[int]:
+    return _resolve_item_group_item_ids(val, item_name_to_id, item_id_to_item)[:3]
+
+
+def _resolve_item_group_item_ids(
+    val: object,
+    item_name_to_id: dict[str, int],
+    item_id_to_item: dict[int, dict] | None,
+) -> list[int]:
+    if not item_id_to_item:
+        return []
+    out: list[int] = []
+
+    def add_iid(iid: int | None) -> None:
+        if iid is None:
+            return
+        if iid in item_id_to_item and iid not in out:
+            out.append(iid)
+
+    def match_type_tier(kind: str, tier: str) -> None:
+        for iid, it in item_id_to_item.items():
+            hier = [str(x) for x in (it.get("TypeHierarchy") or [])]
+            if kind in hier and str(it.get("Tier") or "") == tier:
+                add_iid(iid)
+
+    if isinstance(val, str):
+        add_iid(item_name_to_id.get(val))
+    elif isinstance(val, list):
+        if val and all(isinstance(x, str) for x in val):
+            if len(val) == 1:
+                add_iid(item_name_to_id.get(str(val[0])))
+            elif len(val) >= 2 and str(val[1]).startswith("T"):
+                match_type_tier(str(val[0]), str(val[1]))
+            else:
+                for x in val:
+                    add_iid(item_name_to_id.get(str(x)))
+        else:
+            for x in val:
+                out.extend(_resolve_item_group_item_ids(x, item_name_to_id, item_id_to_item))
+    deduped: list[int] = []
+    seen: set[int] = set()
+    for iid in out:
+        if iid not in seen:
+            seen.add(iid)
+            deduped.append(iid)
+    return deduped
+
+
+def _item_group_label(val: object) -> str:
+    if isinstance(val, list):
+        if len(val) >= 2 and all(isinstance(x, str) for x in val):
+            return " ".join(str(x) for x in val)
+        parts: list[str] = []
+        for x in val:
+            lbl = _item_group_label(x)
+            if lbl:
+                parts.append(lbl)
+        return " / ".join(parts[:3])
+    if isinstance(val, str):
+        return val
+    return ""
+
+
+def _link_image_wikitext(img_wiki: str, page_path: str) -> str:
+    # Inject MediaWiki file-link target: [[File:...|40px|link=Page]]
+    marker = "]]"
+    i = img_wiki.find(marker)
+    if i == -1:
+        return img_wiki
+    return f"{img_wiki[:i]}|link={page_path}{img_wiki[i:]}"
+
+
+def _link_location_name(name: str, location_name_to_path: dict[str, str] | None) -> str:
+    if location_name_to_path and name in location_name_to_path:
+        return f"[[{location_name_to_path[name]}|{name}]]"
+    return name
+
+
+def _normalize_enemy_drops(
+    drops: list[dict],
+    item_name_to_id: dict[str, int],
+    item_id_to_item: dict[int, dict] | None,
+) -> list[dict]:
+    out: list[dict] = []
+    seen: set[str] = set()
+    for d in drops:
+        entries = _normalize_enemy_drop_entries(d, item_name_to_id, item_id_to_item)
+        for nd in entries:
+            key = str(nd.get("key") or "")
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            out.append(nd)
+    return out
+
+
+def _normalize_enemy_drop_entries(
+    drop: dict,
+    item_name_to_id: dict[str, int],
+    item_id_to_item: dict[int, dict] | None,
+) -> list[dict]:
+    dt = drop.get("DropType")
+    val = drop.get("Value")
+    out: list[dict] = []
+
+    def item_entry_from_name(name: str) -> dict | None:
+        iid = item_name_to_id.get(name)
+        if not iid or not item_id_to_item or iid not in item_id_to_item:
+            return None
+        it = item_id_to_item[iid]
+        item_name = str(it.get("Name") or name)
+        tier_raw = str(it.get("Tier") or "")
+        return {
+            "kind": "item",
+            "key": f"item:{it.get('Id') or item_name}",
+            "name": item_name,
+            "item_id": iid,
+            "type_label": str((it.get("TypeHierarchy") or ["Item"])[0]),
+            "drop_tier_type": int(it.get("DropTierType") or 0),
+            "tier_sort_value": _get_tier_sort_value(tier_raw),
+        }
+
+    def group_entry_or_item(kind: str, tier_raw: str) -> dict:
+        group_name = f"{kind} {tier_raw}".strip()
+        matched = _resolve_item_group_item_ids([kind, tier_raw], item_name_to_id, item_id_to_item)
+        if len(matched) == 1 and item_id_to_item and matched[0] in item_id_to_item:
+            it = item_id_to_item[matched[0]]
+            item_name = str(it.get("Name") or f"Item {matched[0]}")
+            return {
+                "kind": "item",
+                "key": f"item:{it.get('Id') or item_name}",
+                "name": item_name,
+                "item_id": matched[0],
+                "type_label": str((it.get("TypeHierarchy") or ["Item"])[0]),
+                "drop_tier_type": int(it.get("DropTierType") or 0),
+                "tier_sort_value": _get_tier_sort_value(str(it.get("Tier") or "")),
+            }
+        preview = matched[:3]
+        drop_tier_type = 0
+        if item_id_to_item:
+            for iid in preview:
+                it = item_id_to_item.get(iid)
+                if not it:
+                    continue
+                drop_tier_type = max(drop_tier_type, int(it.get("DropTierType") or 0))
+        return {
+            "kind": "itemgroup",
+            "key": f"group:{group_name}",
+            "name": group_name,
+            "group_kind": kind,
+            "group_tier": tier_raw,
+            "preview_item_ids": preview[:3],
+            "type_label": "Item Group",
+            "drop_tier_type": drop_tier_type,
+            "tier_sort_value": _get_tier_sort_value(tier_raw),
+        }
+
+    if dt == "Item" and isinstance(val, str):
+        one = item_entry_from_name(val)
+        return [one] if one else []
+    if dt == "ItemGroup" and isinstance(val, list):
+        # Handles mixed payloads such as:
+        # [["Primary Weapon","T3"],["Armor","T3"],["Speed Infusion"],["Secondary Ability","T2"]]
+        for part in val:
+            if isinstance(part, list):
+                if len(part) >= 2 and isinstance(part[0], str) and isinstance(part[1], str) and str(part[1]).upper().startswith("T"):
+                    out.append(group_entry_or_item(str(part[0]), str(part[1])))
+                elif len(part) == 1 and isinstance(part[0], str):
+                    one = item_entry_from_name(str(part[0]))
+                    if one:
+                        out.append(one)
+            elif isinstance(part, str):
+                one = item_entry_from_name(part)
+                if one:
+                    out.append(one)
+        # Also support flat ["Type","T3"] format
+        if not out and len(val) >= 2 and isinstance(val[0], str) and isinstance(val[1], str) and str(val[1]).upper().startswith("T"):
+            out.append(group_entry_or_item(str(val[0]), str(val[1])))
+        return out
+    return []
+
+
+def _get_tier_sort_value(tier: str) -> int:
+    t = str(tier or "").strip().upper()
+    if t.startswith("T"):
+        num = t[1:]
+        if num.isdigit():
+            return int(num)
+    return 0
+
+
+def _render_normalized_enemy_drop_entry(
+    site: pywikibot.Site,
+    nd: dict,
+    version: str,
+    item_id_to_path: dict[int, str],
+    item_id_to_item: dict[int, dict] | None,
+) -> str:
+    kind = nd.get("kind")
+    if kind == "item":
+        iid = nd.get("item_id")
+        if iid is None:
+            return ""
+        it = item_id_to_item.get(iid) if item_id_to_item else None
+        name = str(nd.get("name") or (it.get("Name") if it else f"Item {iid}"))
+        path = item_id_to_path.get(iid)
+        icon = ""
+        if it:
+            icon = _render_drop_item_icon_with_tier(site, it, version, path)
+        label = f"[[{path}|{name}]]" if path else name
+        return f"{icon} {label}".strip()
+    if kind == "itemgroup":
+        chunks: list[str] = []
+        nm = str(nd.get("name") or "")
+        if nm:
+            chunks.append(f"'''{nm}'''")
+        icons: list[str] = []
+        for iid in nd.get("preview_item_ids") or []:
+            it = item_id_to_item[iid] if item_id_to_item and iid in item_id_to_item else None
+            if not it:
+                continue
+            item_name = str(it.get("Name") or f"Item {iid}")
+            path = item_id_to_path.get(iid)
+            icon = _render_drop_item_icon_with_tier(site, it, version, path)
+            if icon:
+                icons.append(icon)
+            else:
+                icons.append(f"[[{path}|{item_name}]]" if path else item_name)
+        if icons:
+            chunks.append(" ".join(icons))
+        return "<br>".join(chunks)
+    return ""
+
+
+def _render_drop_item_icon_with_tier(
+    site: pywikibot.Site,
+    item: dict,
+    version: str,
+    page_path: str | None,
+) -> str:
+    base_icon = upload_sprite_if_possible(site, item.get("Sprite"), version, thumb_size=40)
+    if not base_icon:
+        return ""
+    if page_path:
+        base_icon = _link_image_wikitext(base_icon, page_path)
+    tier_icon = ""
+    if item.get("TierIcon"):
+        tier_icon = upload_sprite_if_possible(site, item.get("TierIcon"), version, thumb_size=16)
+        if tier_icon and page_path:
+            tier_icon = _link_image_wikitext(tier_icon, page_path)
+    if not tier_icon:
+        return base_icon
+    return (
+        '<span style="display:inline-block;position:relative;line-height:0;">'
+        f"{base_icon}"
+        '<span style="position:absolute;right:-2px;bottom:-2px;pointer-events:none;">'
+        f"{tier_icon}"
+        "</span></span>"
+    )

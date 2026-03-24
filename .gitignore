@@ -1,0 +1,23 @@
+# Environment
+.env
+LocalSettings.php
+db_backup.sql
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+apicache/
+*.lwp
+*.ctrl
+
+notes.txt
+
+user-password.py
+user-config.py
+
+pq-datadump.json
+
+bot/cache/
+bot/state/

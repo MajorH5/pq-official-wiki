@@ -1,0 +1,5 @@
+# Short URLs: /wiki/Page_title → index.php (see Manual:Short_URL)
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteRule ^/?wiki(/.*)?$ %{DOCUMENT_ROOT}/index.php [L]
+</IfModule>

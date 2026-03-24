@@ -1,0 +1,4 @@
+pywikibot
+requests
+Pillow
+Flask

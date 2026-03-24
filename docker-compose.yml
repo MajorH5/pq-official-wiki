@@ -1,0 +1,45 @@
+services:
+  database:
+    image: mariadb
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - db:/var/lib/mysql
+
+  mediawiki:
+    build: ./mediawiki
+    restart: always
+    ports:
+      - "8080:80"
+    depends_on:
+      - database
+    volumes:
+      - images:/var/www/html/images
+      - ./uploads.ini:/usr/local/etc/php/conf.d/uploads.ini
+      - ./LocalSettings.php:/var/www/html/LocalSettings.php
+
+  pqwikibot:
+    build: ./bot
+    depends_on:
+      - mediawiki
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./bot:/bot
+    working_dir: /bot
+    env_file:
+      - .env
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PYWIKIBOT_DIR: /bot
+      # Ensure bot user is set even if .env omits or blanks WIKI_BOT_USER
+      WIKI_BOT_USER: ${WIKI_BOT_USER:-Pqadmin}
+      WIKI_MEDIAWIKI_HOST: mediawiki
+      INGEST_HOST: 0.0.0.0
+      INGEST_PORT: "8081"
+    command: python -m pq_wiki serve
+
+volumes:
+  db:
+  images:
