@@ -128,8 +128,13 @@ def wikitable(rows: list[tuple[str, str]]) -> str:
 
 
 def escape_template_param_value(s: str) -> str:
-    """Escape | as {{!}} so wikitext can be passed as a named template parameter."""
-    return s.replace("|", "{{!}}")
+    """Escape | and = for named template parameters ({{PQ Item|information=...}}).
+
+    - ``|`` → ``{{!}}`` so table pipes do not end the parameter.
+    - ``=`` → ``{{=}}`` so HTML attrs (href=, class=, …) are not parsed as new params.
+    """
+    s = s.replace("|", "{{!}}")
+    return s.replace("=", "{{=}}")
 
 
 def template_invocation(

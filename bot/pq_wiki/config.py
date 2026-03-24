@@ -8,6 +8,10 @@ CACHE_DIR = BOT_ROOT / "cache"
 TEXTURE_CACHE_DIR = CACHE_DIR / "textures"
 WIKI_UPLOAD_MAP_PATH = CACHE_DIR / "wiki_image_map.json"
 LAST_VERSION_PATH = STATE_DIR / "last_datadump_version.json"
+# Incremental import: SHA-256 of last datadump on disk + render fingerprint (see import_diff.py)
+LAST_IMPORT_STATE_PATH = STATE_DIR / "last_import_state.json"
+# Cached copy of last successfully imported datadump (for JSON diff); ignored via bot/cache/
+LAST_DATADUMP_CACHE_PATH = CACHE_DIR / "last_datadump.json"
 WIKI_OVERRIDES_PATH = BOT_ROOT / "wiki_overrides.json"
 
 ROBLOX_COOKIE = os.environ.get("ROBLOX_COOKIE", "").strip()
@@ -58,4 +62,5 @@ WIKI_LAYOUT_TEMPLATES_DIR = Path(
 
 def ensure_dirs() -> None:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
     TEXTURE_CACHE_DIR.mkdir(parents=True, exist_ok=True)

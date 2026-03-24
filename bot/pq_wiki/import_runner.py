@@ -24,6 +24,15 @@ from pq_wiki.config import (
     WIKI_BOT_USER,
     ensure_dirs,
 )
+from pq_wiki.import_diff import (
+    compute_incremental_sets,
+    compute_render_fingerprint,
+    load_cached_datadump,
+    read_last_import_state,
+    sha256_file,
+    write_cached_datadump,
+    write_last_import_state,
+)
 from pq_wiki.difficulty_icons import build_difficulty_skull_wikitext
 from pq_wiki.drop_sources import build_item_id_to_drop_sources
 from pq_wiki.import_log import get_import_logger
@@ -135,16 +144,11 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
     if not version:
         raise ValueError("Datadump missing Version field")
 
+    datadump_sha256 = sha256_file(datadump_path)
+    render_fp = compute_render_fingerprint()
     prev = read_last_version()
     effective_force = force or FORCE_OVERWRITE
-    if not effective_force and prev == version:
-        log.info("Skip import: same datadump version %s", version)
-        return {
-            "ok": True,
-            "skipped": True,
-            "reason": "same_version",
-            "version": version,
-        }
+
     if FORCE_OVERWRITE:
         log.info("FORCE_OVERWRITE=1: overriding same-version guard and page ownership checks")
 
@@ -309,6 +313,38 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
         int(go["Id"]): go for go in game_objects if go.get("IsEntity", True)
     }
 
+    old_cached = load_cached_datadump()
+    last_state = read_last_import_state() or {}
+    ci: set[int] = set()
+    cl: set[int] = set()
+    ce: set[int] = set()
+    import_full = (
+        old_cached is None
+        or last_state.get("render_fingerprint") != render_fp
+        or os.environ.get("PQ_IMPORT_FULL", "").strip().lower() in ("1", "true", "yes")
+        or force
+    )
+    if import_full:
+        log.info(
+            "Full wiki rebuild (no/partial cache, render fingerprint changed, PQ_IMPORT_FULL, or --force)",
+        )
+    else:
+        ci, cl, ce = compute_incremental_sets(
+            old_data=old_cached,
+            new_items=items,
+            new_locations=locations,
+            new_game_objects=game_objects,
+            unreleased_entities=unreleased_entities,
+        )
+        log.info(
+            "Incremental scope: %d items, %d locations, %d entities with data changes",
+            len(ci),
+            len(cl),
+            len(ce),
+        )
+        if not ci and not cl and not ce:
+            log.info("Incremental diff: no page updates needed (wikitext would be unchanged)")
+
     stats: dict[str, int] = {}
     errors: list[str] = []
 
@@ -355,6 +391,8 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
             log.error("FAILED %s %s\n%s", kind, title, traceback.format_exc())
 
     for it in items_to_process:
+        if not import_full and int(it["Id"]) not in ci:
+            continue
         path = item_id_to_path[it["Id"]]
         name = it.get("Name", it["Id"])
 
@@ -385,6 +423,8 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
         _one("item", path, build_item, save_item)
 
     for loc in locations_to_process:
+        if not import_full and int(loc["Id"]) not in cl:
+            continue
         path = location_id_to_path[loc["Id"]]
         name = loc.get("Name", loc["Id"])
 
@@ -409,6 +449,8 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
         _one("location", path, build_loc, save_loc)
 
     for go in entities_to_process:
+        if not import_full and int(go["Id"]) not in ce:
+            continue
         path = entity_id_to_path[go["Id"]]
         name = go.get("Name", go["Id"])
 
@@ -436,7 +478,16 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
 
         _one("entity", path, build_go, save_ent)
 
-    write_last_version(version)
+    if not errors:
+        write_cached_datadump(datadump_path)
+        write_last_import_state(
+            datadump_version=version,
+            datadump_content_sha256=datadump_sha256,
+            render_fingerprint=render_fp,
+        )
+        write_last_version(version)
+    else:
+        log.warning("Not updating cached datadump / import state because of errors")
     log.info(
         "Import finished version=%s stats=%s errors=%d",
         version,
@@ -453,6 +504,10 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
         "previous_version": prev,
         "stats": stats,
         "errors": errors,
+        "import_full": import_full,
+        "incremental_items": len(ci) if not import_full else None,
+        "incremental_locations": len(cl) if not import_full else None,
+        "incremental_entities": len(ce) if not import_full else None,
     }
 
 
