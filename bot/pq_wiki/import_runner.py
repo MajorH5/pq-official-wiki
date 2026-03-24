@@ -372,6 +372,7 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
                 item_id_to_path=item_id_to_path,
                 item_id_to_item=item_id_to_item,
                 location_name_to_path=location_name_to_path,
+                location_name_to_portal=location_name_to_portal,
                 go_name_to_id=go_name_to_id,
                 entity_id_to_path=entity_id_to_path,
                 status_effect_icons=status_effect_icons,

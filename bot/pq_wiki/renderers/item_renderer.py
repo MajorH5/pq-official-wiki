@@ -3,7 +3,7 @@ from __future__ import annotations
 import pywikibot
 
 from pq_wiki.drop_sources import ItemDropSource, format_item_drop_sources_wikitext
-from pq_wiki.renderers.entity_renderer import _format_status_effects, _link_image_wikitext
+from pq_wiki.renderers.entity_renderer import _found_in_location_cell, _format_status_effects, _link_image_wikitext
 from pq_wiki.renderers.shared import fmt_range, green, link_entity
 from pq_wiki.texture_service import upload_projectile_sprite, upload_sprite_if_possible
 from pq_wiki.valor_icon import valor_label
@@ -46,6 +46,7 @@ def build_item_wikitext(
     item_id_to_path: dict[int, str] | None = None,
     item_id_to_item: dict[int, dict] | None = None,
     location_name_to_path: dict[str, str] | None = None,
+    location_name_to_portal: dict[str, dict] | None = None,
     go_name_to_id: dict[str, int] | None = None,
     entity_id_to_path: dict[int, str] | None = None,
     status_effect_icons: dict[str, str] | None = None,
@@ -127,6 +128,7 @@ def build_item_wikitext(
         item_id_to_path,
         item_id_to_item,
         location_name_to_path,
+        location_name_to_portal,
         go_name_to_id,
         entity_id_to_path,
         entity_id_to_go,
@@ -222,6 +224,11 @@ def build_item_wikitext(
                     ws_rows.append(("Defense penetration", dp_cell))
             if (proj.get("MaxHitsPerEntity") or 0) > 1:
                 ws_rows.append(("Multi-hit", fmt_num(proj.get("MaxHitsPerEntity"))))
+        pse = proj.get("StatusEffects")
+        if pse:
+            pse_cell = _format_status_effects(pse, status_effect_icons)
+            if pse_cell:
+                ws_rows.append(("Status effects", pse_cell))
         if "Secondary Ability" in hier_set and item.get("Cooldown") is not None:
             try:
                 cd = float(item["Cooldown"])
@@ -519,6 +526,7 @@ def _append_type_specific_rows(
     item_id_to_path: dict[int, str] | None,
     item_id_to_item: dict[int, dict] | None,
     location_name_to_path: dict[str, str] | None,
+    location_name_to_portal: dict[str, dict] | None,
     go_name_to_id: dict[str, int] | None,
     entity_id_to_path: dict[int, str] | None,
     entity_id_to_go: dict[int, dict] | None,
@@ -578,10 +586,18 @@ def _append_type_specific_rows(
                 pass
     if "Key" in hier_set and item.get("Dungeon"):
         dname = str(item.get("Dungeon"))
-        if location_name_to_path and dname in location_name_to_path:
-            info_rows.append(("Dungeon", f"[[{location_name_to_path[dname]}|{dname}]]"))
-        else:
-            info_rows.append(("Dungeon", dname))
+        info_rows.append(
+            (
+                "Dungeon",
+                _found_in_location_cell(
+                    site,
+                    dname,
+                    version,
+                    location_name_to_path,
+                    location_name_to_portal,
+                ),
+            ),
+        )
     pk = item.get("PossibleKeys")
     if isinstance(pk, list) and pk:
         lines: list[str] = []
