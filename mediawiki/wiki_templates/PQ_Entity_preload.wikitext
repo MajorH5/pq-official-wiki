@@ -3,6 +3,8 @@
 |found_in=
 |event_biomes=
 |statistics=
+|speeches=
+|spawns=
 |loot=
 |attacks=
 |categories=[[Category:Enemies]]

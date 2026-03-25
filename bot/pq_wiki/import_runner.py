@@ -37,14 +37,17 @@ from pq_wiki.difficulty_icons import build_difficulty_skull_wikitext
 from pq_wiki.drop_sources import build_item_id_to_drop_sources
 from pq_wiki.import_log import get_import_logger
 from pq_wiki.loot_tier_icons import build_drop_tier_icon_parts_map, build_drop_tier_wikitext_map
+from pq_wiki.skin_rarity_icons import build_skin_rarity_wikitext_map
 from pq_wiki.render_pages import (
     build_entity_wikitext,
     build_item_wikitext,
     build_location_wikitext,
+    build_skin_wikitext,
     entity_page_path,
     item_page_path,
     location_page_path,
     save_bot_page,
+    skin_page_path,
 )
 from pq_wiki.renderers.save import peek_skip_build_reason
 from pq_wiki.stat_icons import build_stat_icon_wikitext_map
@@ -91,8 +94,8 @@ def _as_int_set(vals: Any) -> set[int]:
 
 def load_overrides() -> dict[str, dict[str, set[int]]]:
     defaults = {
-        "skip": {"items": set(), "locations": set(), "entities": set()},
-        "unreleased": {"items": set(), "locations": set(), "entities": set()},
+        "skip": {"items": set(), "locations": set(), "entities": set(), "skins": set()},
+        "unreleased": {"items": set(), "locations": set(), "entities": set(), "skins": set()},
     }
     if not WIKI_OVERRIDES_PATH.exists():
         return defaults
@@ -104,14 +107,14 @@ def load_overrides() -> dict[str, dict[str, set[int]]]:
         block = raw.get(section) if isinstance(raw, dict) else None
         if not isinstance(block, dict):
             continue
-        for kind in ("items", "locations", "entities"):
+        for kind in ("items", "locations", "entities", "skins"):
             defaults[section][kind] = _as_int_set(block.get(kind))
     return defaults
 
 
 def _warn_missing_layout_templates(site: pywikibot.Site, log) -> None:
     """If layout templates are missing, item pages show raw {{PQ Item|...}} instead of rendering."""
-    for short in ("PQ Item", "PQ Entity", "PQ Location"):
+    for short in ("PQ Item", "PQ Entity", "PQ Location", "PQ Skin"):
         title = f"Template:{short}"
         p = pywikibot.Page(site, title)
         try:
@@ -165,6 +168,13 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
     t_login = time.perf_counter()
     site.login()
     log.info("Wiki login OK (%.0f ms)", (time.perf_counter() - t_login) * 1000)
+    try:
+        log.info(
+            "Wiki target (must match the site you open in the browser): %s",
+            site,
+        )
+    except Exception:
+        pass
 
     ensure_pixel_art_css(site)
     _warn_missing_layout_templates(site, log)
@@ -176,9 +186,11 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
     skip_items = overrides["skip"]["items"]
     skip_locations = overrides["skip"]["locations"]
     skip_entities = overrides["skip"]["entities"]
+    skip_skins = overrides["skip"]["skins"]
     unreleased_items = overrides["unreleased"]["items"]
     unreleased_locations = overrides["unreleased"]["locations"]
     unreleased_entities = overrides["unreleased"]["entities"]
+    unreleased_skins = overrides["unreleased"]["skins"]
 
     items = [it for it in items if int(it.get("Id", -1)) not in skip_items]
     locations = [loc for loc in locations if int(loc.get("Id", -1)) not in skip_locations]
@@ -187,14 +199,20 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
         for go in game_objects
         if (not go.get("IsEntity", True)) or int(go.get("Id", -1)) not in skip_entities
     ]
+    character_skins = data.get("CharacterSkins") or []
+    character_skins = [s for s in character_skins if int(s.get("Id", -1)) not in skip_skins]
+
     log.info(
-        "Overrides loaded: skip(items=%d,locations=%d,entities=%d) unreleased(items=%d,locations=%d,entities=%d)",
+        "Overrides loaded: skip(items=%d,locations=%d,entities=%d,skins=%d) "
+        "unreleased(items=%d,locations=%d,entities=%d,skins=%d)",
         len(skip_items),
         len(skip_locations),
         len(skip_entities),
+        len(skip_skins),
         len(unreleased_items),
         len(unreleased_locations),
         len(unreleased_entities),
+        len(unreleased_skins),
     )
 
     stat_icons = build_stat_icon_wikitext_map(site, data, version)
@@ -204,9 +222,15 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
     valor_icon_wikitext = build_valor_icon_wikitext(site, data, version)
     log.info("Valor icon ready: %s", bool(valor_icon_wikitext))
     drop_tiers = {int((it.get("DropTierType") or 0)) for it in items}
+    if character_skins:
+        # Skin drops group as tier 6 (other legendaries); ensure icons exist even if no item uses 6.
+        drop_tiers = drop_tiers | {6}
     drop_tier_icons = build_drop_tier_wikitext_map(site, data, version, drop_tiers)
     drop_tier_icon_parts = build_drop_tier_icon_parts_map(site, data, version, drop_tiers)
     log.info("Drop tier icons ready: %d", len(drop_tier_icons))
+    skin_rarities = {int((s.get("Rarity") or 0)) for s in character_skins}
+    skin_rarity_icon_wikitext = build_skin_rarity_wikitext_map(site, data, version, skin_rarities)
+    log.info("Skin rarity icons ready: %d", len(skin_rarity_icon_wikitext))
     difficulty_skull_icon = build_difficulty_skull_wikitext(site, data, version, size_px=40)
 
     nlim = GENERATE_FEW_PAGES_LIMIT
@@ -214,14 +238,16 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
     locations_to_process = locations[:nlim] if nlim else locations
     all_entities = [go for go in game_objects if go.get("IsEntity", True)]
     entities_to_process = all_entities[:nlim] if nlim else all_entities
+    skins_to_process = character_skins[:nlim] if nlim else character_skins
 
     if nlim:
         log.info(
-            "GENERATE_FEW_PAGES cap %d per type: importing %d items, %d locations, %d entities",
+            "GENERATE_FEW_PAGES cap %d per type: importing %d items, %d locations, %d entities, %d skins",
             nlim,
             len(items_to_process),
             len(locations_to_process),
             len(entities_to_process),
+            len(skins_to_process),
         )
 
     item_name_to_id: dict[str, int] = {}
@@ -313,11 +339,21 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
         int(go["Id"]): go for go in game_objects if go.get("IsEntity", True)
     }
 
+    skin_id_to_path: dict[int, str] = {}
+    for sk in sorted(character_skins, key=lambda x: x["Id"]):
+        sid = int(sk["Id"])
+        is_unreleased = sid in unreleased_skins
+        used = used_paths_unreleased if is_unreleased else used_paths_public
+        base = skin_page_path(sk, used)
+        skin_id_to_path[sid] = _with_unreleased_namespace(base, is_unreleased)
+    skin_id_to_skin: dict[int, dict[str, Any]] = {int(s["Id"]): s for s in character_skins}
+
     old_cached = load_cached_datadump()
     last_state = read_last_import_state() or {}
     ci: set[int] = set()
     cl: set[int] = set()
     ce: set[int] = set()
+    cs: set[int] = set()
     import_full = (
         old_cached is None
         or last_state.get("render_fingerprint") != render_fp
@@ -329,20 +365,22 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
             "Full wiki rebuild (no/partial cache, render fingerprint changed, PQ_IMPORT_FULL, or --force)",
         )
     else:
-        ci, cl, ce = compute_incremental_sets(
+        ci, cl, ce, cs = compute_incremental_sets(
             old_data=old_cached,
             new_items=items,
             new_locations=locations,
             new_game_objects=game_objects,
+            new_character_skins=character_skins,
             unreleased_entities=unreleased_entities,
         )
         log.info(
-            "Incremental scope: %d items, %d locations, %d entities with data changes",
+            "Incremental scope: %d items, %d locations, %d entities, %d skins with data changes",
             len(ci),
             len(cl),
             len(ce),
+            len(cs),
         )
-        if not ci and not cl and not ce:
+        if not ci and not cl and not ce and not cs:
             log.info("Incremental diff: no page updates needed (wikitext would be unchanged)")
 
     stats: dict[str, int] = {}
@@ -471,12 +509,35 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
                 stat_icons=stat_icons,
                 status_effect_icons=status_effect_icons,
                 unreleased=int(g["Id"]) in unreleased_entities,
+                entity_id_to_go=entity_id_to_go,
+                skin_id_to_skin=skin_id_to_skin,
+                skin_id_to_path=skin_id_to_path,
+                skin_rarity_icon_wikitext=skin_rarity_icon_wikitext,
             )
 
         def save_ent(s, ttl, txt, ver, user, k):
             return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=FORCE_OVERWRITE)
 
         _one("entity", path, build_go, save_ent)
+
+    for sk in skins_to_process:
+        if not import_full and int(sk["Id"]) not in cs:
+            continue
+        path = skin_id_to_path[int(sk["Id"])]
+        name = sk.get("Name", sk["Id"])
+
+        def build_skin(s=sk):
+            return build_skin_wikitext(
+                site,
+                s,
+                version,
+                unreleased=int(s["Id"]) in unreleased_skins,
+            )
+
+        def save_skin(s, ttl, txt, ver, user, k):
+            return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=FORCE_OVERWRITE)
+
+        _one("skin", path, build_skin, save_skin)
 
     if not errors:
         write_cached_datadump(datadump_path)
@@ -488,6 +549,11 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
         write_last_version(version)
     else:
         log.warning("Not updating cached datadump / import state because of errors")
+    log.info(
+        "If saved edits do not appear: hard-refresh the tab, or open the article with "
+        "?action=purge — MediaWiki and the browser both cache rendered HTML. "
+        "Set PQ_IMPORT_LOG_LEVEL=DEBUG or PQ_IMPORT_VERBOSE_SAVE=1 for per-save revision details."
+    )
     log.info(
         "Import finished version=%s stats=%s errors=%d",
         version,

@@ -132,6 +132,8 @@ def escape_template_param_value(s: str) -> str:
 
     - ``|`` → ``{{!}}`` so table pipes do not end the parameter.
     - ``=`` → ``{{=}}`` so HTML attrs (href=, class=, …) are not parsed as new params.
+
+    Because ``=`` is escaped, wiki section markup ``== Title ==`` breaks; use ``<h2>Title</h2>`` inside param values instead.
     """
     s = s.replace("|", "{{!}}")
     return s.replace("=", "{{=}}")

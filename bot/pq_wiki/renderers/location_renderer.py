@@ -42,7 +42,6 @@ def build_location_wikitext(
 
     d = _location_difficulty_int(loc.get("Difficulty"))
     portal_rows: list[tuple[str, str]] = [
-        ("Id", fmt_num(lid)),
         ("Teleportation", "Yes" if loc.get("TeleportationEnabled") else "No"),
     ]
     if d > 0:
@@ -61,18 +60,20 @@ def build_location_wikitext(
     found_entities_block = ""
     found = loc.get("FoundGameObjects") or []
     if found:
+        found_names = _sort_entity_names_by_tag([str(n) for n in found], entity_name_to_go)
         fe_cells = [
-            _render_entity_preview_cell(site, str(n), version, go_name_to_id, entity_id_to_path, entity_name_to_go)
-            for n in found
+            _render_entity_preview_cell(site, n, version, go_name_to_id, entity_id_to_path, entity_name_to_go)
+            for n in found_names
         ]
         found_entities_block = _entity_multicolumn_wikitable("== Found entities ==", "Entity", fe_cells)
 
     dropped_from_block = ""
     dropped_from = _entities_that_drop_location(name, entity_name_to_go)
     if dropped_from:
+        dropped_names = _sort_entity_names_by_tag(dropped_from, entity_name_to_go)
         df_cells = [
             _render_entity_preview_cell(site, n, version, go_name_to_id, entity_id_to_path, entity_name_to_go)
-            for n in dropped_from
+            for n in dropped_names
         ]
         dropped_from_block = _entity_multicolumn_wikitable("== Dropped from ==", "Enemy", df_cells)
 
@@ -234,6 +235,30 @@ def _entity_tag(go: dict | None) -> str:
     return ""
 
 
+def _entity_found_sort_rank(go: dict | None) -> int:
+    """Lower sorts first: dungeon/world/biome bosses, then troom, quest, then regular."""
+    if not go:
+        return 3
+    if go.get("IsDungeonBoss") or go.get("IsWorldBoss") or go.get("IsBiomeBoss"):
+        return 0
+    if go.get("IsTroomBoss"):
+        return 1
+    if go.get("IsQuestEntity"):
+        return 2
+    return 3
+
+
+def _sort_entity_names_by_tag(
+    names: list[str],
+    entity_name_to_go: dict[str, dict] | None,
+) -> list[str]:
+    def key(n: str) -> tuple[int, str]:
+        go = entity_name_to_go.get(n) if entity_name_to_go else None
+        return (_entity_found_sort_rank(go), n.lower())
+
+    return sorted(names, key=key)
+
+
 def _entity_multicolumn_wikitable(section_heading: str, column_header: str, cells: list[str]) -> str:
     """Same wrapping as item == Dropped by == and entity loot: scroll div + wikitable + multicolumn inner."""
     if not cells:
@@ -293,7 +318,7 @@ def _entities_that_drop_location(location_name: str, entity_name_to_go: dict[str
         if location_name in drops and n not in seen:
             seen.add(n)
             out.append(n)
-    return sorted(out)
+    return out
 
 
 def _link_image_wikitext(img_wiki: str, page_path: str) -> str:

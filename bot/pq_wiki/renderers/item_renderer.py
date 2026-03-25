@@ -52,7 +52,6 @@ def build_item_wikitext(
     status_effect_icons: dict[str, str] | None = None,
     valor_icon_wikitext: str | None = None,
 ) -> str:
-    iid = item["Id"]
     tier = item.get("Tier", "")
     hier = item.get("TypeHierarchy") or []
     desc = html_to_wikitext(item.get("Description", ""))
@@ -85,7 +84,6 @@ def build_item_wikitext(
 
     info_rows = [
         ("Type", type_hierarchy_links(hier)),
-        ("Id", fmt_num(item.get("Id"))),
         ("Tradable", "Yes" if item.get("IsTradable") else "No"),
         ("Drop Type", drop_tier_wikitext or fmt_num(item.get("DropTierType"))),
     ]
@@ -665,12 +663,9 @@ def _append_type_specific_rows(
             try:
                 uid = int(rid)
                 url = f"https://www.roblox.com/users/{uid}/profile"
+                # External link syntax — not raw HTML: template param escaping mangles "=" in attributes.
                 info_rows.append(
-                    (
-                        "Recipient",
-                        f'<a href="{url}" class="external" target="_blank" rel="noopener noreferrer">'
-                        f"Roblox profile ({uid})</a>",
-                    ),
+                    ("Recipient", f"[{url} Roblox profile ({uid})]"),
                 )
             except (TypeError, ValueError):
                 pass

@@ -69,3 +69,12 @@ def entity_page_path(go: dict, used_paths: set[str] | None = None) -> str:
     if used_paths is None:
         return _clean_title(go.get("Name"), fb)
     return _claim_unique_title(go.get("Name"), fb, gid, used_paths)
+
+
+def skin_page_path(skin: dict, used_paths: set[str] | None = None) -> str:
+    """Flat title for CharacterSkins (shared namespace)."""
+    sid = int(skin["Id"])
+    fb = f"Skin {sid}"
+    if used_paths is None:
+        return _clean_title(skin.get("Name"), fb)
+    return _claim_unique_title(skin.get("Name"), fb, sid, used_paths)

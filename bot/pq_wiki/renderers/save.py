@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import os
+
 import pywikibot
+
+from pq_wiki.import_log import get_import_logger
 
 
 def _canonical_username(x: object) -> str:
@@ -70,6 +74,19 @@ def peek_skip_build_reason(
     return None
 
 
+def _norm_wikitext(s: str) -> str:
+    """Compare like MediaWiki storage: normalize newlines and trim ends."""
+    return s.replace("\r\n", "\n").replace("\r", "\n").strip()
+
+
+def _verbose_save_logs() -> bool:
+    return os.environ.get("PQ_IMPORT_VERBOSE_SAVE", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+
+
 def save_bot_page(
     site: pywikibot.Site,
     title: str,
@@ -79,15 +96,61 @@ def save_bot_page(
     kind: str,
     force_overwrite: bool = False,
 ) -> str:
+    log = get_import_logger()
     page = pywikibot.Page(site, title)
+    old_rev: int | None = None
+    old_len: int | None = None
     if page.exists():
+        try:
+            page.get()
+            old_len = len(page.text)
+            old_rev = page.latest_revision_id
+        except Exception:
+            pass
         if "__NOPQBOT__" in page.text:
             return "skipped_nopqbot"
         if not force_overwrite and not _last_editors_match(bot_user, page):
             return "skipped_human"
-        if (not force_overwrite) and page.text.strip() == text.strip():
+        if (not force_overwrite) and _norm_wikitext(page.text) == _norm_wikitext(text):
+            log.debug(
+                "wiki_save unchanged title=%r bytes=%s rev=%s",
+                title,
+                old_len,
+                old_rev,
+            )
             return "unchanged"
     summary = f"PQ bot datadump {version} ({kind})"
     page.text = text
     page.save(summary=summary, minor=False)
+    new_rev: int | None = None
+    try:
+        page.get(force=True)
+        new_rev = page.latest_revision_id
+    except Exception as e:
+        log.warning("wiki_save could not refresh page after save title=%r: %s", title, e)
+    new_len = len(text)
+    line = (
+        "wiki_save title=%r kind=%s old_rev=%s new_rev=%s old_bytes=%s new_bytes=%s"
+        % (title, kind, old_rev, new_rev, old_len, new_len)
+    )
+    if _verbose_save_logs():
+        log.info(line)
+    else:
+        log.debug(line)
+    # Same revision + same byte length => MediaWiki treated this as a no-op (nothing actually
+    # changed vs current revision). Not an error. Warn only if we expected different content.
+    if old_rev is not None and new_rev is not None and new_rev == old_rev:
+        if old_len != new_len:
+            log.warning(
+                "wiki_save revision id did not advance despite different size: %r "
+                "(old_bytes=%s new_bytes=%s)",
+                title,
+                old_len,
+                new_len,
+            )
+        else:
+            log.debug(
+                "wiki_save no new revision (wikitext matches current revision after save): %r",
+                title,
+            )
     return "saved"

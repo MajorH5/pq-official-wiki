@@ -37,9 +37,12 @@ _RENDER_CODE_PATHS: tuple[Path, ...] = (
     BOT_ROOT / "pq_wiki" / "renderers" / "item_renderer.py",
     BOT_ROOT / "pq_wiki" / "renderers" / "entity_renderer.py",
     BOT_ROOT / "pq_wiki" / "renderers" / "location_renderer.py",
+    BOT_ROOT / "pq_wiki" / "renderers" / "skin_renderer.py",
     BOT_ROOT / "pq_wiki" / "renderers" / "shared.py",
     BOT_ROOT / "pq_wiki" / "wikitext_util.py",
     BOT_ROOT / "pq_wiki" / "drop_sources.py",
+    BOT_ROOT / "pq_wiki" / "skin_drops.py",
+    BOT_ROOT / "pq_wiki" / "skin_rarity_icons.py",
     BOT_ROOT / "pq_wiki" / "stat_icons.py",
     BOT_ROOT / "pq_wiki" / "status_effect_icons.py",
     BOT_ROOT / "pq_wiki" / "valor_icon.py",
@@ -49,6 +52,7 @@ _TEMPLATE_NAMES: tuple[str, ...] = (
     "PQ_Item.wikitext",
     "PQ_Entity.wikitext",
     "PQ_Location.wikitext",
+    "PQ_Skin.wikitext",
 )
 
 
@@ -194,6 +198,23 @@ def diff_item_ids(
     return changed
 
 
+def diff_skin_ids(
+    old_data: dict[str, Any],
+    new_skins: list[dict[str, Any]],
+) -> set[int]:
+    old_skins = old_data.get("CharacterSkins") or []
+    new_idx = _index_by_id(new_skins)
+    old_idx = _index_by_id(list(old_skins))
+    changed: set[int] = set()
+    for sid, row in new_idx.items():
+        if sid not in old_idx:
+            changed.add(sid)
+            continue
+        if _object_hash(row) != _object_hash(old_idx[sid]):
+            changed.add(sid)
+    return changed
+
+
 def diff_location_ids(
     old_data: dict[str, Any],
     new_locations: list[dict[str, Any]],
@@ -293,9 +314,10 @@ def compute_incremental_sets(
     new_items: list[dict[str, Any]],
     new_locations: list[dict[str, Any]],
     new_game_objects: list[dict[str, Any]],
+    new_character_skins: list[dict[str, Any]],
     unreleased_entities: set[int],
-) -> tuple[set[int], set[int], set[int]]:
-    """Returns (changed_item_ids, changed_location_ids, changed_entity_ids)."""
+) -> tuple[set[int], set[int], set[int], set[int]]:
+    """Returns (changed_item_ids, changed_location_ids, changed_entity_ids, changed_skin_ids)."""
     ci = diff_item_ids(
         old_data,
         new_items,
@@ -304,4 +326,5 @@ def compute_incremental_sets(
     )
     cl = diff_location_ids(old_data, new_locations)
     ce = diff_entity_ids(old_data, new_game_objects, new_locations)
-    return ci, cl, ce
+    cs = diff_skin_ids(old_data, new_character_skins)
+    return ci, cl, ce, cs

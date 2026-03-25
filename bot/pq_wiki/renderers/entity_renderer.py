@@ -1,15 +1,34 @@
 from __future__ import annotations
 
+import html
 import pywikibot
 
 from pq_wiki.renderers.shared import fmt_range, format_drop
+from pq_wiki.skin_drops import format_skin_drop_cell
 from pq_wiki.texture_service import upload_portal_preview, upload_projectile_sprite, upload_sprite_if_possible
 from pq_wiki.wikitext_util import (
     defense_penetration_attack_line_html,
     fmt_num,
     template_invocation,
-    wikitable,
 )
+
+
+def _trailing_nl(s: str) -> str:
+    """So consecutive template params can be written on one line without merging sections."""
+    if not s:
+        return s
+    return s if s.endswith("\n") else s + "\n"
+
+
+def _html_statistics_table(rows: list[tuple[str, str]]) -> str:
+    """HTML table (not wikitext {{!}}) so {{PQ Entity|statistics=…}} survives pipe escaping."""
+    if not rows:
+        return ""
+    lines = ['<table class="wikitable">']
+    for k, v in rows:
+        lines.append(f'<tr><th scope="row">{k}</th><td>{v}</td></tr>')
+    lines.append("</table>")
+    return "\n".join(lines)
 
 
 def build_entity_wikitext(
@@ -28,10 +47,20 @@ def build_entity_wikitext(
     stat_icons: dict[str, str] | None = None,
     status_effect_icons: dict[str, str] | None = None,
     unreleased: bool = False,
+    entity_id_to_go: dict[int, dict] | None = None,
+    skin_id_to_skin: dict[int, dict] | None = None,
+    skin_id_to_path: dict[int, str] | None = None,
+    skin_rarity_icon_wikitext: dict[int, str] | None = None,
 ) -> str:
     gid = go["Id"]
     name = go.get("Name", f"Entity {gid}")
     hostile = go.get("IsHostile")
+    is_boss = bool(
+        go.get("IsBiomeBoss")
+        or go.get("IsTroomBoss")
+        or go.get("IsDungeonBoss")
+        or go.get("IsWorldBoss")
+    )
 
     icon = upload_sprite_if_possible(site, go.get("Sprite"), version)
 
@@ -54,20 +83,21 @@ def build_entity_wikitext(
                 )
             )
     if found_parts:
-        found_in_str = "== Found in locations ==\n" + ", ".join(found_parts)
+        # Use <h2> not == … == — "=" in params is escaped as {{=}} and breaks wiki headings.
+        found_in_str = "<h2>Found in locations</h2>\n" + ", ".join(found_parts)
     else:
         found_in_str = ""
 
     event_biomes = go.get("EventBiomes") or []
     if event_biomes:
-        event_biomes_str = "== Event biomes ==\n" + ", ".join(
+        event_biomes_str = "<h2>Event biomes</h2>\n" + ", ".join(
             _link_location_name(str(b), location_name_to_path) for b in event_biomes
         )
     else:
         event_biomes_str = ""
 
     exp = go.get("ExperienceValue") or {}
-    st_rows: list[tuple[str, str]] = [("Id", fmt_num(gid))]
+    st_rows: list[tuple[str, str]] = []
     if hostile:
         st_rows.extend(
             [
@@ -79,7 +109,7 @@ def build_entity_wikitext(
     imm_txt = _format_immunities(go.get("Immunity"), status_effect_icons)
     if imm_txt:
         st_rows.append(("Immunity", imm_txt))
-    statistics_table = wikitable(st_rows)
+    statistics_table = _html_statistics_table(st_rows) if st_rows else ""
 
     private_drops = go.get("PrivateDrops") or []
     public_drops = go.get("PublicDrops") or []
@@ -94,15 +124,32 @@ def build_entity_wikitext(
         item_id_to_item,
         go_name_to_id,
         drop_tier_icon_parts,
+        skin_id_to_skin=skin_id_to_skin,
+        skin_id_to_path=skin_id_to_path,
+        skin_rarity_icon_wikitext=skin_rarity_icon_wikitext,
     )
 
     projs = go.get("ProjectileDescriptors") or []
     attacks_block = _build_attacks_section_wikitext(site, projs, version, status_effect_icons)
 
+    speeches_block = _format_speeches_section(go)
+    spawns_block = _format_spawns_section(
+        site,
+        go,
+        version,
+        entity_id_to_path,
+        entity_id_to_go,
+    )
+
     if hostile:
         cat_lines = ["[[Category:Enemies]]"]
     else:
         cat_lines = ["[[Category:Entities]]", "[[Category:Friendlies]]"]
+    # Sidebar navigation buckets.
+    if is_boss:
+        cat_lines.append("[[Category:Bosses]]")
+    elif not hostile:
+        cat_lines.append("[[Category:NPCs]]")
     if unreleased:
         cat_lines.append("[[Category:Unreleased]]")
     categories_block = "\n".join(cat_lines)
@@ -110,16 +157,108 @@ def build_entity_wikitext(
     body = template_invocation(
         "PQ Entity",
         [
-            ("icon", icon),
-            ("found_in", found_in_str),
-            ("event_biomes", event_biomes_str),
-            ("statistics", statistics_table),
-            ("loot", loot_block),
-            ("attacks", attacks_block),
+            ("icon", _trailing_nl(icon) if icon else ""),
+            ("found_in", _trailing_nl(found_in_str)),
+            ("event_biomes", _trailing_nl(event_biomes_str)),
+            ("statistics", _trailing_nl(statistics_table)),
+            ("speeches", _trailing_nl(speeches_block)),
+            ("spawns", _trailing_nl(spawns_block)),
+            ("loot", _trailing_nl(loot_block)),
+            ("attacks", _trailing_nl(attacks_block)),
             ("categories", categories_block),
         ],
     )
     return f"<!-- PQ bot generated {version} -->{body}"
+
+
+def _format_speeches_section(go: dict) -> str:
+    raw = go.get("Speeches")
+    if not isinstance(raw, list) or not raw:
+        return ""
+    spawn_m = go.get("SpawnMessage")
+    despawn_m = go.get("DespawnMessage")
+    lines: list[str] = []
+    for entry in raw:
+        text = str(entry).strip() if entry is not None else ""
+        if not text:
+            continue
+        safe = html.escape(text, quote=True)
+        line = f'<span style="font-style:italic">"{safe}"</span>'
+        tags: list[str] = []
+        if spawn_m is not None and text == str(spawn_m).strip():
+            tags.append("Spawn cue")
+        if despawn_m is not None and text == str(despawn_m).strip():
+            tags.append("Despawn cue")
+        if tags:
+            tag_txt = ", ".join(tags)
+            line += f' <small style="color:#666">({tag_txt})</small>'
+        lines.append(f"* {line}")
+    if not lines:
+        return ""
+    return "<h2>Dialogue</h2>\n" + "\n".join(lines)
+
+
+def _format_spawns_section(
+    site: pywikibot.Site,
+    go: dict,
+    version: str,
+    entity_id_to_path: dict[int, str],
+    entity_id_to_go: dict[int, dict] | None,
+) -> str:
+    raw = go.get("Reproduction")
+    if not isinstance(raw, list) or not raw:
+        return ""
+    if not entity_id_to_go or not entity_id_to_path:
+        return ""
+    eids: list[int] = []
+    seen: set[int] = set()
+    for entry in raw:
+        try:
+            eid = int(entry)
+        except (TypeError, ValueError):
+            continue
+        if eid in seen:
+            continue
+        child = entity_id_to_go.get(eid)
+        path = entity_id_to_path.get(eid)
+        if not child or not path:
+            continue
+        seen.add(eid)
+        eids.append(eid)
+
+    if not eids:
+        return ""
+
+    def _spawn_sort_key(eid: int) -> tuple[str, int]:
+        ch = entity_id_to_go[eid]
+        label = str(ch.get("Name") or f"Entity {eid}")
+        return (label.lower(), eid)
+
+    eids.sort(key=_spawn_sort_key)
+    out_lines = [
+        f"* {_format_spawned_entity_line(site, eid, version, entity_id_to_path, entity_id_to_go)}"
+        for eid in eids
+    ]
+    return "<h2>Spawns</h2>\n" + "\n".join(out_lines)
+
+
+def _format_spawned_entity_line(
+    site: pywikibot.Site,
+    eid: int,
+    version: str,
+    entity_id_to_path: dict[int, str],
+    entity_id_to_go: dict[int, dict] | None,
+) -> str:
+    child = entity_id_to_go.get(eid) if entity_id_to_go else None
+    path = entity_id_to_path.get(eid)
+    if not child or not path:
+        return ""
+    nm = str(child.get("Name") or f"Entity {eid}")
+    icon = upload_sprite_if_possible(site, child.get("Sprite"), version, thumb_size=40)
+    if icon:
+        icon = _link_image_wikitext(icon, path)
+    label = f"[[{path}|{nm}]]"
+    return f"{icon} {label}".strip()
 
 
 _LOOT_DROP_ROWS_PER_SUBCOLUMN = 5
@@ -174,11 +313,23 @@ def _build_loot_section_wikitext(
     item_id_to_item: dict[int, dict] | None,
     go_name_to_id: dict[str, int],
     drop_tier_icon_parts: dict[int, dict[str, str]] | None,
+    skin_id_to_skin: dict[int, dict] | None = None,
+    skin_id_to_path: dict[int, str] | None = None,
+    skin_rarity_icon_wikitext: dict[int, str] | None = None,
 ) -> str:
     if not drops:
         return ""
-    lines: list[str] = ["== Loot ==", '{| class="wikitable"', "! Drop Type", "! Drop"]
-    normalized = _normalize_enemy_drops(drops, item_name_to_id, item_id_to_item)
+    lines: list[str] = [
+        "<h2>Loot</h2>",
+        '<table class="wikitable">',
+        "<tr><th>Drop Type</th><th>Drop</th></tr>",
+    ]
+    normalized = _normalize_enemy_drops(
+        drops,
+        item_name_to_id,
+        item_id_to_item,
+        skin_id_to_skin=skin_id_to_skin,
+    )
     groups: dict[int, list[dict]] = {}
     for nd in normalized:
         tier = int(nd.get("drop_tier_type") or 0)
@@ -206,6 +357,9 @@ def _build_loot_section_wikitext(
                 version,
                 item_id_to_path,
                 item_id_to_item,
+                skin_id_to_skin=skin_id_to_skin,
+                skin_id_to_path=skin_id_to_path,
+                skin_rarity_icon_wikitext=skin_rarity_icon_wikitext,
             )
             if not body:
                 continue
@@ -217,16 +371,39 @@ def _build_loot_section_wikitext(
             part = "chest" if is_boss else "bag"
             group_icon = drop_tier_icon_parts[tier].get(part, "")
         drop_cell = _layout_drops_multicolumn(rendered_rows)
-        lines.append("|-")
-        lines.append(f'| valign="middle" style="text-align:center;" | {group_icon}')
-        lines.append(f"| {drop_cell}")
+        lines.append(
+            '<tr><td style="vertical-align:middle;text-align:center;">'
+            f"{group_icon}</td><td>{drop_cell}</td></tr>"
+        )
     if not groups:
         for d in drops:
-            lines.append("|-")
-            lines.append('| valign="middle" style="text-align:center;" | ')
-            lines.append(f"| {format_drop(d, item_name_to_id, item_id_to_path, go_name_to_id)}")
-    lines.append("|}")
+            fd = format_drop(
+                d,
+                item_name_to_id,
+                item_id_to_path,
+                go_name_to_id,
+                skin_id_to_skin=skin_id_to_skin,
+                skin_id_to_path=skin_id_to_path,
+                skin_rarity_icon_wikitext=skin_rarity_icon_wikitext,
+                site=site,
+                version=version,
+            )
+            lines.append(
+                '<tr><td style="vertical-align:middle;text-align:center;"></td>'
+                f"<td>{fd}</td></tr>"
+            )
+    lines.append("</table>")
     return "\n".join(lines)
+
+
+_ATTACK_TABLE_COLS: tuple[tuple[str, str], ...] = (
+    ("image", "Image"),
+    ("damage", "Damage"),
+    ("range", "Range (tiles)"),
+    ("speed", "Speed (tiles/sec)"),
+    ("status", "Status effects"),
+    ("other", "Other"),
+)
 
 
 def _build_attacks_section_wikitext(
@@ -238,6 +415,10 @@ def _build_attacks_section_wikitext(
     if not projs:
         return ""
     attack_rows: list[dict[str, str]] = []
+    has_image = False
+    has_damage = False
+    has_range = False
+    has_speed = False
     has_status = False
     has_other = False
     for p in projs:
@@ -281,40 +462,49 @@ def _build_attacks_section_wikitext(
             other.append("Pierces")
         status_txt = _format_status_effects(p.get("StatusEffects"), status_effect_icons)
         other_txt = "<br>".join(other)
-        has_status = has_status or bool(status_txt)
-        has_other = has_other or bool(other_txt)
+        dmg_plain = fmt_range(dmg.get("Min"), dmg.get("Max"))
+        has_image = has_image or bool(str(pw).strip())
+        has_damage = has_damage or bool(str(dmg_plain).strip())
+        has_range = has_range or bool(str(range_txt).strip())
+        has_speed = has_speed or bool(str(speed_txt).strip())
+        has_status = has_status or bool(str(status_txt).strip())
+        has_other = has_other or bool(str(other_txt).strip())
         attack_rows.append({
             "image": f'<div style="text-align:center">{pw}</div>',
-            "damage": f"'''{fmt_range(dmg.get('Min'), dmg.get('Max'))}'''",
+            "damage": f"'''{dmg_plain}'''" if dmg_plain else "",
             "range": range_txt,
             "speed": speed_txt,
             "status": status_txt,
             "other": other_txt,
         })
 
+    show: dict[str, bool] = {
+        "image": has_image,
+        "damage": has_damage,
+        "range": has_range,
+        "speed": has_speed,
+        "status": has_status,
+        "other": has_other,
+    }
+    if not any(show.values()):
+        show = {k: True for k, _ in _ATTACK_TABLE_COLS}
+
+    active_cols = [key for key, _ in _ATTACK_TABLE_COLS if show[key]]
+
     lines: list[str] = [
-        "== Attacks ==",
-        '{| class="wikitable" style="text-align:center;"',
-        "! Image",
-        "! Damage",
-        "! Range (tiles)",
-        "! Speed (tiles/sec)",
+        "<h2>Attacks</h2>",
+        '<table class="wikitable" style="text-align:center;">',
     ]
-    if has_status:
-        lines.append("! Status effects")
-    if has_other:
-        lines.append("! Other")
+    hdr_cells = "".join(
+        f"<th>{hdr}</th>" for key, hdr in _ATTACK_TABLE_COLS if show[key]
+    )
+    lines.append(f"<tr>{hdr_cells}</tr>")
     for row in attack_rows:
-        lines.append("|-")
-        lines.append(f"| {row['image']}")
-        lines.append(f"| {row['damage']}")
-        lines.append(f"| {row['range']}")
-        lines.append(f"| {row['speed']}")
-        if has_status:
-            lines.append(f"| {row['status']}")
-        if has_other:
-            lines.append(f"| {row['other']}")
-    lines.append("|}")
+        cells = "".join(
+            f"<td>{row[key]}</td>" for key, _ in _ATTACK_TABLE_COLS if show[key]
+        )
+        lines.append(f"<tr>{cells}</tr>")
+    lines.append("</table>")
     return "\n".join(lines)
 
 
@@ -624,11 +814,17 @@ def _normalize_enemy_drops(
     drops: list[dict],
     item_name_to_id: dict[str, int],
     item_id_to_item: dict[int, dict] | None,
+    skin_id_to_skin: dict[int, dict] | None = None,
 ) -> list[dict]:
     out: list[dict] = []
     seen: set[str] = set()
     for d in drops:
-        entries = _normalize_enemy_drop_entries(d, item_name_to_id, item_id_to_item)
+        entries = _normalize_enemy_drop_entries(
+            d,
+            item_name_to_id,
+            item_id_to_item,
+            skin_id_to_skin=skin_id_to_skin,
+        )
         for nd in entries:
             key = str(nd.get("key") or "")
             if not key or key in seen:
@@ -638,10 +834,44 @@ def _normalize_enemy_drops(
     return out
 
 
+def _skin_metadata_entry(
+    drop: dict,
+    skin_id_to_skin: dict[int, dict] | None,
+) -> dict | None:
+    if not skin_id_to_skin:
+        return None
+    val = drop.get("Value")
+    if str(val) != "Skin":
+        return None
+    md = drop.get("Metadata")
+    if not isinstance(md, dict):
+        return None
+    try:
+        sid = int(md.get("rid"))
+    except (TypeError, ValueError):
+        return None
+    if sid not in skin_id_to_skin:
+        return None
+    sk = skin_id_to_skin[sid]
+    name = str(sk.get("Name") or f"Skin {sid}")
+    rr = int(sk.get("Rarity") or 0)
+    return {
+        "kind": "skin",
+        "key": f"skin:{sid}",
+        "name": name,
+        "skin_id": sid,
+        # Group with drop tier 6 (other legendaries) in loot tables, not tier 0.
+        "drop_tier_type": 6,
+        "tier_sort_value": max(0, 10 - rr),
+        "type_label": "Skin",
+    }
+
+
 def _normalize_enemy_drop_entries(
     drop: dict,
     item_name_to_id: dict[str, int],
     item_id_to_item: dict[int, dict] | None,
+    skin_id_to_skin: dict[int, dict] | None = None,
 ) -> list[dict]:
     dt = drop.get("DropType")
     val = drop.get("Value")
@@ -700,6 +930,9 @@ def _normalize_enemy_drop_entries(
         }
 
     if dt == "Item" and isinstance(val, str):
+        skin_e = _skin_metadata_entry(drop, skin_id_to_skin)
+        if skin_e:
+            return [skin_e]
         one = item_entry_from_name(val)
         return [one] if one else []
     if dt == "ItemGroup" and isinstance(val, list):
@@ -739,8 +972,23 @@ def _render_normalized_enemy_drop_entry(
     version: str,
     item_id_to_path: dict[int, str],
     item_id_to_item: dict[int, dict] | None,
+    skin_id_to_skin: dict[int, dict] | None = None,
+    skin_id_to_path: dict[int, str] | None = None,
+    skin_rarity_icon_wikitext: dict[int, str] | None = None,
 ) -> str:
     kind = nd.get("kind")
+    if kind == "skin":
+        sid = nd.get("skin_id")
+        if sid is None or not skin_id_to_skin or not skin_id_to_path:
+            return ""
+        return format_skin_drop_cell(
+            site,
+            version,
+            int(sid),
+            skin_id_to_skin,
+            skin_id_to_path,
+            skin_rarity_icon_wikitext or {},
+        )
     if kind == "item":
         iid = nd.get("item_id")
         if iid is None:

@@ -45,10 +45,41 @@ def format_drop(
     item_name_to_id: dict[str, int],
     item_id_to_path: dict[int, str],
     go_name_to_id: dict[str, int],
+    *,
+    skin_id_to_skin: dict[int, dict] | None = None,
+    skin_id_to_path: dict[int, str] | None = None,
+    skin_rarity_icon_wikitext: dict[int, str] | None = None,
+    site: Any = None,
+    version: str | None = None,
 ) -> str:
     dt = drop.get("DropType")
     val = drop.get("Value")
     if dt == "Item" and isinstance(val, str):
+        if (
+            val == "Skin"
+            and skin_id_to_skin
+            and skin_id_to_path
+            and site
+            and version
+            and isinstance(drop.get("Metadata"), dict)
+        ):
+            from pq_wiki.skin_drops import format_skin_drop_cell
+
+            try:
+                sid = int((drop.get("Metadata") or {}).get("rid"))
+            except (TypeError, ValueError):
+                sid = None
+            if sid is not None and sid in skin_id_to_skin and sid in skin_id_to_path:
+                cell = format_skin_drop_cell(
+                    site,
+                    version,
+                    sid,
+                    skin_id_to_skin,
+                    skin_id_to_path,
+                    skin_rarity_icon_wikitext or {},
+                )
+                if cell:
+                    return cell
         iid = item_name_to_id.get(val)
         if iid:
             path = item_id_to_path.get(iid)

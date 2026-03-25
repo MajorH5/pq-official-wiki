@@ -194,8 +194,15 @@ def animation_frames_rgba(animation: dict, sheet: Image.Image) -> list[Image.Ima
     return frames
 
 
-def _animation_duration_ms(animation: dict, fps_scale: float = 1.0) -> int:
-    fps = float(animation.get("Fps") or 10) * fps_scale
+def _animation_duration_ms(
+    animation: dict,
+    fps_scale: float = 1.0,
+    fps_override: float | None = None,
+) -> int:
+    if fps_override is not None:
+        fps = float(fps_override) * fps_scale
+    else:
+        fps = float(animation.get("Fps") or 10) * fps_scale
     return max(20, int(1000 / fps)) if fps > 0 else 100
 
 
@@ -203,11 +210,12 @@ def render_animation_to_gif_bytes(
     animation: dict,
     sheet: Image.Image,
     fps_scale: float = 1.0,
+    fps_override: float | None = None,
 ) -> bytes:
     frames = animation_frames_rgba(animation, sheet)
     if not frames:
         raise ValueError("No frames in animation")
-    duration_ms = _animation_duration_ms(animation, fps_scale=fps_scale)
+    duration_ms = _animation_duration_ms(animation, fps_scale=fps_scale, fps_override=fps_override)
     return _rgba_frames_to_transparent_gif(frames, duration_ms)
 
 
@@ -245,6 +253,49 @@ def render_static_sprite(sprite: dict, sheet: Image.Image) -> bytes:
     im = _crop_sheet(sheet, ox, oy, w, h).convert("RGBA")
     buf = io.BytesIO()
     im.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+_SKIN_RARITY_CELL = 54
+
+
+def render_skin_rarity_icon_bytes(rarity: int, sheet: Image.Image) -> tuple[bytes, str]:
+    """
+    Textures.TIER_ICONS_16X16_RENDERED_3X_OUTLINE: yOffset = (3 + rarity) * 54, x = 0, crop 54×54.
+    Common/Uncommon: static PNG. Rare+: 6 horizontal frames, 150 ms/frame.
+    """
+    r = int(rarity)
+    top = (3 + r) * _SKIN_RARITY_CELL
+    w = h = _SKIN_RARITY_CELL
+    if r <= 1:
+        im = _crop_sheet(sheet, 0, top, w, h).convert("RGBA")
+        buf = io.BytesIO()
+        im.save(buf, format="PNG")
+        return buf.getvalue(), "png"
+    frames: list[Image.Image] = []
+    for col in range(6):
+        left = col * w
+        frames.append(_crop_sheet(sheet, left, top, w, h).convert("RGBA"))
+    return _rgba_frames_to_transparent_gif(frames, 150), "gif"
+
+
+def character_skin_animation_first_frame_png(skin: dict, anim_key: str = "e_idle") -> Optional[bytes]:
+    """First frame of a CharacterSkin animation (e.g. e_idle) for drop preview icons."""
+    anims = skin.get("Animations") or {}
+    anim = anims.get(anim_key)
+    if not anim:
+        return None
+    tex = get_texture_url(skin.get("Sprite"))
+    aid = parse_asset_id(tex or "")
+    if not aid:
+        return None
+    raw = fetch_asset_bytes(aid)
+    sheet = Image.open(io.BytesIO(raw)).convert("RGBA")
+    frames = animation_frames_rgba(anim, sheet)
+    if not frames:
+        return None
+    buf = io.BytesIO()
+    frames[0].save(buf, format="PNG")
     return buf.getvalue()
 
 

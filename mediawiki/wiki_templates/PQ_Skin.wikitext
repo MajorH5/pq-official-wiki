@@ -1,0 +1,12 @@
+<noinclude>
+'''Character skin layout''' — transcluded by skin pages. Bot fills named parameters.
+</noinclude>
+'''{{{name|}}}'''
+
+{{{head|}}}
+
+{{{desc|}}}
+
+{{{animations|}}}
+
+{{{categories|}}}
