@@ -11,7 +11,7 @@ RUN git clone --depth 1 https://github.com/wikimedia/mediawiki-extensions-Lockdo
 RUN git clone --depth 1 https://gerrit.wikimedia.org/r/mediawiki/extensions/Lingo.git /var/www/html/extensions/Lingo
 
 # ParserFunctions (#if, #ifeq, …) — required for PQ layout templates
-RUN git clone --depth 1 https://gerrit.wikimedia.org/r/mediawiki/extensions/ParserFunctions.git /var/www/html/extensions/ParserFunctions
+# RUN git clone --depth 1 https://gerrit.wikimedia.org/r/mediawiki/extensions/ParserFunctions.git /var/www/html/extensions/ParserFunctions
 
 RUN a2enmod rewrite
 
