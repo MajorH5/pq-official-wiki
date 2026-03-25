@@ -4,6 +4,7 @@ import html
 import pywikibot
 
 from pq_wiki.renderers.shared import fmt_range, format_drop
+from pq_wiki.seo import first_wiki_filename_from_file_wikitext, wiki_seo_block
 from pq_wiki.skin_drops import format_skin_drop_cell
 from pq_wiki.texture_service import upload_portal_preview, upload_projectile_sprite, upload_sprite_if_possible
 from pq_wiki.wikitext_util import (
@@ -168,7 +169,20 @@ def build_entity_wikitext(
             ("categories", categories_block),
         ],
     )
-    return f"<!-- PQ bot generated {version} -->{body}"
+    if is_boss:
+        seo_desc = f"{name} — boss in Pixel Quest."
+    elif hostile:
+        seo_desc = f"{name} — enemy in Pixel Quest."
+    else:
+        seo_desc = f"{name} — friendly NPC in Pixel Quest."
+    seo = wiki_seo_block(
+        site,
+        page_title=name,
+        description=seo_desc,
+        wiki_image_filename=first_wiki_filename_from_file_wikitext(icon),
+        image_alt=f"{name} sprite",
+    )
+    return f"<!-- PQ bot generated {version} -->{body}\n\n{seo}"
 
 
 def _format_speeches_section(go: dict) -> str:

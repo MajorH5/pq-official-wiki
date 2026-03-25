@@ -12,7 +12,8 @@ from pq_wiki.sprites import (
     normalize_gif_bytes_for_imagemagick,
     render_animation_to_gif_bytes,
 )
-from pq_wiki.texture_service import upload_raw_bytes_fixed_hash
+from pq_wiki.seo import first_wiki_filename_from_file_wikitext, plain_text_for_seo, wiki_seo_block
+from pq_wiki.texture_service import upload_raw_bytes_fixed_hash, upload_sprite_if_possible
 from pq_wiki.wikitext_util import html_to_wikitext, template_invocation
 
 _DIRECTION_ORDER = ("e", "n", "s", "w")
@@ -161,4 +162,18 @@ def build_skin_wikitext(
         ],
         always_emit_keys=frozenset({"name", "head"}),
     )
-    return f"<!-- PQ bot generated {version} -->{body}"
+    sprite_preview = upload_sprite_if_possible(site, skin.get("Sprite"), version)
+    desc_plain = plain_text_for_seo(desc)
+    seo_desc = (
+        f"{name} — {desc_plain}. Pixel Quest Wiki character skin."
+        if desc_plain
+        else f"{name} — Pixel Quest Wiki character skin."
+    )
+    seo = wiki_seo_block(
+        site,
+        page_title=name,
+        description=seo_desc,
+        wiki_image_filename=first_wiki_filename_from_file_wikitext(sprite_preview),
+        image_alt=f"{name} skin",
+    )
+    return f"<!-- PQ bot generated {version} -->{body}\n\n{seo}"

@@ -1,0 +1,79 @@
+<!-- Pixel Quest main page. Hero: init.sh copies resources/images/hero-header.png → /images/hero-header.png -->
+<div class="pq-main-hero" style="width:100%;max-width:1200px;margin:0 auto 1.25em auto;padding-bottom:min(32vw,280px);background:url(/images/hero-header.png) center/cover no-repeat;border-radius:10px;box-shadow:0 4px 12px rgba(0,0,0,.18)"></div>
+
+<div style="text-align:center;margin:0 0 1.75em 0;font-size:105%">
+'''[https://www.roblox.com/games/80003276594057/Pixel-Quest Play on Roblox]''' ·
+'''[https://discord.gg/pixelquest Discord]''' ·
+'''[https://www.youtube.com/@PlayPixelQuest YouTube]''' ·
+'''[https://x.com/PlayPixelQuest Twitter / X]'''
+</div>
+
+{| class="wikitable" style="width:100%;max-width:1200px;margin:0 auto 1.5em auto"
+|+ ''Placeholder — replace with your own copy''
+|-
+| '''Introduction'''
+| ''(Welcome blurb, patch notes link, etc.)''
+|-
+| '''Getting started'''
+| ''(Links to guides, controls, new player tips.)''
+|}
+
+== Items ==
+''One example page per type — swap names after import if titles differ. Browse links go to categories.''
+
+{| class="wikitable" style="width:100%;max-width:1200px;margin:0 auto"
+! style="width:18%" | Type
+! style="width:42%" | Example
+! style="width:40%" | Browse
+|-
+| '''Armor'''
+| [[Nutcracker's Coat]]
+| [[:Category:Heavy Armor|Heavy armor]]
+|-
+| '''Weapons'''
+| [[Frost Bow]]
+| [[:Category:Bow|Bows]]
+|-
+| '''Potions & consumables'''
+| [[Potion of Health]]
+| [[:Category:Potion|Potions]]
+|-
+| '''Keys'''
+| [[Zombie Cemetery Key]]
+| [[:Category:Key|Keys]]
+|-
+| '''Runes'''
+| [[Rune IV]]
+| [[:Category:Rune|Runes]]
+|-
+| '''Infusions'''
+| [[Dexterity Infusion]]
+| [[:Category:Infusion|Infusions]]
+|-
+| '''Character skins'''
+| [[Crusader]]
+| [[:Category:Character skins|Character skins]]
+|}
+
+== Locations ==
+''Spotlight — add or replace links as you like.''
+
+<div style="text-align:center;max-width:1200px;margin:0 auto;line-height:1.8">
+[[Haven]] · [[Tutorial]] · [[Fetid Swamp]] · [[Seer's Sanctum]] · [[Magic Crypt]] · [[Crystal Depths]]
+</div>
+
+== Bosses ==
+''Spotlight — notable dungeon / world bosses.''
+
+<div style="text-align:center;max-width:1200px;margin:0 auto;line-height:1.8">
+[[Ahi the Wyrmm]] · [[Rotwood the Swamp Warden]] · [[Pirate Captain]] · [[Seer the Corrupted]] · [[Zeal the Sorcerer King]] · [[Inferno God]]
+</div>
+
+{{#seo:
+ |title=Pixel Quest Wiki
+ |title_mode=append
+ |description=Pixel Quest Wiki — items, locations, enemies, dungeons, and character skins.
+ |image={{SERVER}}/images/default-preview.png
+ |image_alt=Pixel Quest Wiki
+ |twitter_card=summary_large_image
+}}

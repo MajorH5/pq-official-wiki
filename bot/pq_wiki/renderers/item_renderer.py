@@ -6,6 +6,7 @@ from pq_wiki.drop_sources import ItemDropSource, format_item_drop_sources_wikite
 from pq_wiki.renderers.entity_renderer import _found_in_location_cell, _format_status_effects, _link_image_wikitext
 from pq_wiki.renderers.shared import fmt_range, green, link_entity
 from pq_wiki.texture_service import upload_projectile_sprite, upload_sprite_if_possible
+from pq_wiki.seo import first_wiki_filename_from_file_wikitext, plain_text_for_seo, wiki_seo_block
 from pq_wiki.valor_icon import valor_label
 from pq_wiki.wikitext_util import (
     defense_penetration_display_html,
@@ -273,7 +274,21 @@ def build_item_wikitext(
         ],
         always_emit_keys=frozenset({"head"}),
     )
-    return f"<!-- PQ bot generated {version} — do not remove -->{body}"
+    item_name = str(item.get("Name") or f"Item {item.get('Id')}")
+    desc_plain = plain_text_for_seo(desc)
+    seo_desc = (
+        f"{item_name} — {desc_plain}. Pixel Quest Wiki."
+        if desc_plain
+        else f"{item_name} — Pixel Quest Wiki item."
+    )
+    seo = wiki_seo_block(
+        site,
+        page_title=item_name,
+        description=seo_desc,
+        wiki_image_filename=first_wiki_filename_from_file_wikitext(icon),
+        image_alt=f"{item_name} icon",
+    )
+    return f"<!-- PQ bot generated {version} — do not remove -->{body}\n\n{seo}"
 
 
 _POTION_STAT_SHORT = {

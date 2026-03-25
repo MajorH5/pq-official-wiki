@@ -12,7 +12,7 @@ fi
 echo "Starting Pixel Quest Wiki stack..."
 docker compose up -d --build
 
-if [ -f resources/images/logo.png ] || [ -f resources/images/favicon.ico ] || [ -f resources/images/hero-header.png ] || [ -f resources/images/pq-thumbnail-1920x1080.png ]; then
+if [ -f resources/images/logo.png ] || [ -f resources/images/favicon.ico ] || [ -f resources/images/hero-header.png ] || [ -f resources/images/pq-thumbnail-1920x1080.png ] || [ -f resources/images/default-preview.png ]; then
   echo "Copying wiki images to mediawiki..."
   sleep 3
   MW_CID="$(docker compose ps -q mediawiki)"
@@ -27,6 +27,9 @@ if [ -f resources/images/logo.png ] || [ -f resources/images/favicon.ico ] || [ 
   fi
   if [ -f resources/images/pq-thumbnail-1920x1080.png ]; then
     docker cp resources/images/pq-thumbnail-1920x1080.png "$MW_CID:/var/www/html/images/pq-thumbnail-1920x1080.png"
+  fi
+  if [ -f resources/images/default-preview.png ]; then
+    docker cp resources/images/default-preview.png "$MW_CID:/var/www/html/images/default-preview.png"
   fi
 fi
 

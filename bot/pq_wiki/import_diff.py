@@ -40,6 +40,7 @@ _RENDER_CODE_PATHS: tuple[Path, ...] = (
     BOT_ROOT / "pq_wiki" / "renderers" / "skin_renderer.py",
     BOT_ROOT / "pq_wiki" / "renderers" / "shared.py",
     BOT_ROOT / "pq_wiki" / "wikitext_util.py",
+    BOT_ROOT / "pq_wiki" / "seo.py",
     BOT_ROOT / "pq_wiki" / "drop_sources.py",
     BOT_ROOT / "pq_wiki" / "skin_drops.py",
     BOT_ROOT / "pq_wiki" / "skin_rarity_icons.py",

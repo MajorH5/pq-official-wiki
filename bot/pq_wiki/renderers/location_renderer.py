@@ -4,6 +4,7 @@ import pywikibot
 
 from pq_wiki.renderers.entity_renderer import _layout_drops_multicolumn
 from pq_wiki.renderers.shared import find_dungeon_key, link_entity
+from pq_wiki.seo import first_wiki_filename_from_file_wikitext, wiki_seo_block
 from pq_wiki.texture_service import upload_portal_preview, upload_sprite_if_possible, upload_sprite_thumb_block
 from pq_wiki.wikitext_util import fmt_num, template_invocation, wikitable
 
@@ -57,6 +58,10 @@ def build_location_wikitext(
     map_section = _build_map_section(site, loc, version, name)
     screenshots_section = _build_screenshots_section(site, loc, version, name)
 
+    seo_image_fname = first_wiki_filename_from_file_wikitext(pimg) or first_wiki_filename_from_file_wikitext(
+        map_section
+    )
+
     found_entities_block = ""
     found = loc.get("FoundGameObjects") or []
     if found:
@@ -95,7 +100,14 @@ def build_location_wikitext(
             ("categories", categories_block),
         ],
     )
-    return f"<!-- PQ bot generated {version} -->{body}"
+    seo = wiki_seo_block(
+        site,
+        page_title=name,
+        description=f"{name} — Pixel Quest Wiki location.",
+        wiki_image_filename=seo_image_fname,
+        image_alt=f"{name} preview",
+    )
+    return f"<!-- PQ bot generated {version} -->{body}\n\n{seo}"
 
 
 def _key_inline_wikitext(

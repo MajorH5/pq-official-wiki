@@ -8,7 +8,7 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location (Join-Path $ScriptDir "..")
 
 $Dump = if ($args[0]) { $args[0] } else { "pq-datadump.json" }
-$Url = if ($env:INGEST_URL) { $env:INGEST_URL } else { "http://localhost:8081/ingest" }
+$Url = if ($env:INGEST_URL) { $env:INGEST_URL } else { "http://playpixelquest.com:8081/ingest" }
 $Token = $env:DATADUMP_INGEST_SECRET
 
 if (-not $Token) {
