@@ -1,5 +1,8 @@
+name: pqwiki
+
 services:
   database:
+    container_name: wikidb
     image: mariadb
     restart: always
     env_file:
@@ -8,6 +11,7 @@ services:
       - db:/var/lib/mysql
 
   mediawiki:
+    container_name: mediawiki
     build: ./mediawiki
     restart: always
     ports:
@@ -20,6 +24,7 @@ services:
       - ./LocalSettings.php:/var/www/html/LocalSettings.php
 
   pqwikibot:
+    container_name: wikibot
     build: ./bot
     depends_on:
       - mediawiki

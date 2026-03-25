@@ -21,3 +21,5 @@ pq-datadump.json
 
 bot/cache/
 bot/state/
+
+enemy_speeches.json
