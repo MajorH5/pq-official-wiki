@@ -5,6 +5,14 @@ import pywikibot
 from pq_wiki.renderers.entity_renderer import _layout_drops_multicolumn
 from pq_wiki.renderers.shared import find_dungeon_key, link_entity
 from pq_wiki.seo import first_wiki_filename_from_file_wikitext, wiki_seo_block
+from pq_wiki.texture_names import (
+    entity_sprite_base,
+    item_sprite_base,
+    location_minimap_base,
+    location_screenshot_base,
+    portal_preview_base,
+    slug,
+)
 from pq_wiki.texture_service import upload_portal_preview, upload_sprite_if_possible, upload_sprite_thumb_block
 from pq_wiki.wikitext_util import fmt_num, template_invocation, wikitable
 
@@ -27,8 +35,13 @@ def build_location_wikitext(
 ) -> str:
     lid = loc["Id"]
     name = loc.get("Name", f"Location {lid}")
+    loc_slug = slug(str(name))
     portal = loc.get("PortalSprite")
-    pimg = upload_portal_preview(site, portal, version) if portal else ""
+    pimg = (
+        upload_portal_preview(site, portal, version, logical_name=portal_preview_base(loc_slug))
+        if portal
+        else ""
+    )
     key_inline = _key_inline_wikitext(
         site,
         name,
@@ -55,8 +68,8 @@ def build_location_wikitext(
     portal_rows.append(("Max players", fmt_num(loc.get("MaxPlayerCount"))))
     portal_table = wikitable(portal_rows)
 
-    map_section = _build_map_section(site, loc, version, name)
-    screenshots_section = _build_screenshots_section(site, loc, version, name)
+    map_section = _build_map_section(site, loc, version, name, loc_slug)
+    screenshots_section = _build_screenshots_section(site, loc, version, name, loc_slug)
 
     seo_image_fname = first_wiki_filename_from_file_wikitext(pimg) or first_wiki_filename_from_file_wikitext(
         map_section
@@ -128,11 +141,13 @@ def _key_inline_wikitext(
     link = f"[[{kpath}|{kn}]]"
     icon = ""
     if item_id_to_item and int(key_id) in item_id_to_item:
+        kit = item_id_to_item[int(key_id)]
         icon = upload_sprite_if_possible(
             site,
-            item_id_to_item[int(key_id)].get("Sprite"),
+            kit.get("Sprite"),
             version,
             thumb_size=40,
+            logical_name=item_sprite_base(int(key_id), str(kit.get("Name") or f"Item {key_id}")),
         )
     if icon and kpath:
         icon = _link_image_wikitext(icon, kpath)
@@ -164,7 +179,9 @@ def _commons_placeholder_thumb(caption: str, width: int = 250) -> str:
     return f"[[File:{_COMMONS_PLACEHOLDER_FILE}|thumb|upright=1|{width}px|{safe}]]"
 
 
-def _build_map_section(site: pywikibot.Site, loc: dict, version: str, location_name: str) -> str:
+def _build_map_section(
+    site: pywikibot.Site, loc: dict, version: str, location_name: str, loc_slug: str
+) -> str:
     """
     Minimap: uses MinimapSprite or Minimap when present; otherwise a Commons placeholder thumb.
     """
@@ -175,13 +192,17 @@ def _build_map_section(site: pywikibot.Site, loc: dict, version: str, location_n
         "Wikimedia Commons: No image available-4x.png."
     )
     if isinstance(sprite, dict) and sprite:
-        block = upload_sprite_thumb_block(site, sprite, version, 320, cap_uploaded)
+        block = upload_sprite_thumb_block(
+            site, sprite, version, 320, cap_uploaded, logical_name=location_minimap_base(loc_slug)
+        )
         if block:
             return f"== Map ==\n{block}"
     return f"== Map ==\n{_commons_placeholder_thumb(cap_placeholder)}"
 
 
-def _build_screenshots_section(site: pywikibot.Site, loc: dict, version: str, location_name: str) -> str:
+def _build_screenshots_section(
+    site: pywikibot.Site, loc: dict, version: str, location_name: str, loc_slug: str
+) -> str:
     """
     Screenshots: Screenshots = [ { \"Sprite\": {...}, \"Caption\": \"...\" }, ... ] when present;
     otherwise a packed gallery of Commons placeholders with captions.
@@ -195,7 +216,14 @@ def _build_screenshots_section(site: pywikibot.Site, loc: dict, version: str, lo
             cap = str(entry.get("Caption") or entry.get("caption") or f"Screenshot {i + 1}").strip()
             sp = entry.get("Sprite") or entry.get("Image")
             if isinstance(sp, dict) and sp:
-                block = upload_sprite_thumb_block(site, sp, version, 400, cap)
+                block = upload_sprite_thumb_block(
+                    site,
+                    sp,
+                    version,
+                    400,
+                    cap,
+                    logical_name=location_screenshot_base(loc_slug, i),
+                )
                 if block:
                     lines.append(block)
     if lines:
@@ -301,7 +329,14 @@ def _render_entity_preview_cell(
     go = entity_name_to_go.get(name) if entity_name_to_go else None
     icon = ""
     if go:
-        icon = upload_sprite_if_possible(site, go.get("Sprite"), version, thumb_size=40)
+        gid = int(go["Id"])
+        icon = upload_sprite_if_possible(
+            site,
+            go.get("Sprite"),
+            version,
+            thumb_size=40,
+            logical_name=entity_sprite_base(gid, str(go.get("Name") or name)),
+        )
     if icon and name in go_name_to_id:
         eid = go_name_to_id[name]
         path = entity_id_to_path.get(eid)

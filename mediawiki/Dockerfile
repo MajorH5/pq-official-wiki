@@ -13,6 +13,12 @@ RUN git clone --depth 1 https://gerrit.wikimedia.org/r/mediawiki/extensions/Ling
 # Extension:WikiSEO (og:title, og:image, Twitter cards — Discord/X previews)
 RUN git clone --depth 1 https://github.com/wikimedia/mediawiki-extensions-WikiSEO.git /var/www/html/extensions/WikiSEO
 
+# Extension:MobileFrontend (mobile UI, pinned to MW 1.45.x branch)
+RUN git clone --depth 1 --single-branch --branch REL1_45 https://gerrit.wikimedia.org/r/mediawiki/extensions/MobileFrontend.git /var/www/html/extensions/MobileFrontend
+
+# Pixel Quest: Roblox account linking + Open Cloud Messaging (repo extension)
+COPY extensions/PixelQuestRoblox /var/www/html/extensions/PixelQuestRoblox
+
 # ParserFunctions (#if, #ifeq, …) — required for PQ layout templates
 # RUN git clone --depth 1 https://gerrit.wikimedia.org/r/mediawiki/extensions/ParserFunctions.git /var/www/html/extensions/ParserFunctions
 

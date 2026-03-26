@@ -29,6 +29,30 @@ def get_texture_url(sprite: Optional[dict]) -> Optional[str]:
     return _g(sprite, "texture", "Texture")
 
 
+def projectile_visual_signature_payload(proj_sprite: dict) -> dict[str, Any]:
+    """
+    Canonical data that determines rendered projectile pixels (see projectile_sprite_to_bytes).
+    Used for wiki filenames so different ProjectileDescriptor.Id values that share the same
+    sheet + crop/animation map to one File: name.
+    """
+    tex = get_texture_url(proj_sprite)
+    aid = parse_asset_id(tex or "")
+    anim = proj_sprite.get("Animation")
+    if anim:
+        return {
+            "asset_id": aid,
+            "fps_scale": 0.5,
+            "animation": anim,
+        }
+    return {
+        "asset_id": aid,
+        "static": {
+            "imageRectOffset": proj_sprite.get("imageRectOffset") or proj_sprite.get("ImageRectOffset"),
+            "imageRectSize": proj_sprite.get("imageRectSize") or proj_sprite.get("ImageRectSize"),
+        },
+    }
+
+
 def sprite_signature_for_hash(sprite: Any) -> str:
     """Stable JSON for hashing (sprite sheets + animation)."""
     return json.dumps(sprite, sort_keys=True, separators=(",", ":"))

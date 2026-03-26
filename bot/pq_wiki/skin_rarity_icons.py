@@ -7,8 +7,9 @@ import pywikibot
 from PIL import Image
 
 from pq_wiki.roblox_assets import fetch_asset_bytes, parse_asset_id
-from pq_wiki.sprites import content_hash, render_skin_rarity_icon_bytes
-from pq_wiki.texture_service import upload_raw_bytes_fixed_hash
+from pq_wiki.sprites import render_skin_rarity_icon_bytes
+from pq_wiki.texture_names import skin_rarity_base
+from pq_wiki.texture_service import upload_raw_bytes_named
 
 _TEXTURE_KEY = "TIER_ICONS_16X16_RENDERED_3X_OUTLINE"
 
@@ -48,13 +49,12 @@ def build_skin_rarity_wikitext_map(
             data, ext = render_skin_rarity_icon_bytes(r, sheet)
         except Exception:
             continue
-        key = content_hash(f"skin_rarity_icon:{_TEXTURE_KEY}:r{r}:{ext}")
-        w = upload_raw_bytes_fixed_hash(
+        w = upload_raw_bytes_named(
             site,
             data,
             ext,
-            content_key=key,
-            version=version,
+            skin_rarity_base(r),
+            version,
             thumb_size=16,
         )
         if w:

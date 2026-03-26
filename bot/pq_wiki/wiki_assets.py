@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -24,45 +25,50 @@ def _save_map(m: dict) -> None:
     WIKI_UPLOAD_MAP_PATH.write_text(json.dumps(m, indent=2, sort_keys=True), encoding="utf-8")
 
 
-def wiki_filename_for_hash(content_hash: str, ext: str) -> str:
-    """
-    Use the full hash in the filename. A 16-char prefix was too short and caused
-    collisions (e.g. item sprite vs stat icon) mapping to the same PQ_tex_*.png.
-    """
-    return f"PQ_tex_{content_hash}.{ext}"
+def sanitize_filename_base(name: str) -> str:
+    """Single path segment: a-z 0-9 _ . -"""
+    s = re.sub(r"[^a-z0-9_.-]", "_", (name or "").lower().strip())
+    s = re.sub(r"_+", "_", s).strip("_")
+    return s or "asset"
+
+
+def wiki_filename_for_semantic(base: str, ext: str) -> str:
+    return f"{sanitize_filename_base(base)}.{ext.lower()}"
 
 
 def ensure_file_uploaded(
     site: pywikibot.Site,
-    content_hash: str,
+    semantic_base: str,
     ext: str,
     source_path: Path,
     version: str,
 ) -> str:
     """
-    Upload file if missing. Returns wiki filename (no File: prefix).
+    Upload file if missing. semantic_base is filename without extension (searchable name).
+    Map key = semantic_base|ext for idempotent re-imports.
     """
-    fname = wiki_filename_for_hash(content_hash, ext)
+    fname = wiki_filename_for_semantic(semantic_base, ext)
+    map_key = f"{semantic_base}|{ext.lower()}"
     m = _load_map()
-    if content_hash in m:
-        existing = m[content_hash]
+    if map_key in m:
+        existing = m[map_key]
         fp = pywikibot.FilePage(site, f"File:{existing}")
         if fp.exists():
             return existing
 
     fp = pywikibot.FilePage(site, f"File:{fname}")
     if fp.exists():
-        m[content_hash] = fname
+        m[map_key] = fname
         _save_map(m)
         return fname
 
-    comment = f"PQ bot texture {content_hash[:12]}… (datadump {version})"
+    comment = f"PQ bot texture {fname} (datadump {version})"
     fp.upload(
         source=str(source_path),
         comment=comment,
         ignore_warnings=True,
     )
-    m[content_hash] = fname
+    m[map_key] = fname
     _save_map(m)
     return fname
 
@@ -80,12 +86,13 @@ def file_wikitext(fname: str, size: int, pixelated: bool = True) -> str:
         return ""
     img = f"[[File:{fname}|{size}px]]"
     if pixelated:
-        return f'<span style="{_PIXEL_ART_STYLE}; display: inline-block">{img}</span>'
+        return f'<span class="pq-pixel-sprite" style="{_PIXEL_ART_STYLE}; display: inline-block">{img}</span>'
     return img
 
 
 _PIXEL_ART_CSS = """
 /* PQ bot: crisp pixel-art sprites (nearest-neighbor scaling) */
+.pq-pixel-sprite img,
 img[src*="PQ_tex_"] {
     image-rendering: pixelated;
     image-rendering: -moz-crisp-edges;

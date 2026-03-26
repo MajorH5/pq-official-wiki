@@ -7,8 +7,8 @@ import pywikibot
 from PIL import Image
 
 from pq_wiki.roblox_assets import fetch_asset_bytes, parse_asset_id
-from pq_wiki.sprites import content_hash
-from pq_wiki.texture_service import upload_raw_bytes_fixed_hash
+from pq_wiki.texture_names import loot_drop_base
+from pq_wiki.texture_service import upload_raw_bytes_named
 
 _CELL_SIZE = 50
 _CHEST_Y = 0
@@ -56,22 +56,20 @@ def build_drop_tier_wikitext_map(
         bag_bytes = _crop_cell(sheet, t, _BAG_Y)
         chest_bytes = _crop_cell(sheet, t, _CHEST_Y)
 
-        bag_key = content_hash(f"bag_tier_{t}:{aid}:{_CELL_SIZE}:{_BAG_Y}")
-        chest_key = content_hash(f"chest_tier_{t}:{aid}:{_CELL_SIZE}:{_CHEST_Y}")
-        bag_w = upload_raw_bytes_fixed_hash(
+        bag_w = upload_raw_bytes_named(
             site,
             bag_bytes,
             "png",
-            content_key=bag_key,
-            version=version,
+            loot_drop_base("bag", t),
+            version,
             thumb_size=40,
         )
-        chest_w = upload_raw_bytes_fixed_hash(
+        chest_w = upload_raw_bytes_named(
             site,
             chest_bytes,
             "png",
-            content_key=chest_key,
-            version=version,
+            loot_drop_base("chest", t),
+            version,
             thumb_size=40,
         )
         combo = " ".join(x for x in (chest_w, bag_w) if x)
@@ -100,22 +98,20 @@ def build_drop_tier_icon_parts_map(
         bag_bytes = _crop_cell(sheet, t, _BAG_Y)
         chest_bytes = _crop_cell(sheet, t, _CHEST_Y)
 
-        bag_key = content_hash(f"bag_tier_{t}:{aid}:{_CELL_SIZE}:{_BAG_Y}")
-        chest_key = content_hash(f"chest_tier_{t}:{aid}:{_CELL_SIZE}:{_CHEST_Y}")
-        bag_w = upload_raw_bytes_fixed_hash(
+        bag_w = upload_raw_bytes_named(
             site,
             bag_bytes,
             "png",
-            content_key=bag_key,
-            version=version,
+            loot_drop_base("bag", t),
+            version,
             thumb_size=40,
         )
-        chest_w = upload_raw_bytes_fixed_hash(
+        chest_w = upload_raw_bytes_named(
             site,
             chest_bytes,
             "png",
-            content_key=chest_key,
-            version=version,
+            loot_drop_base("chest", t),
+            version,
             thumb_size=40,
         )
         out[t] = {"chest": chest_w, "bag": bag_w}

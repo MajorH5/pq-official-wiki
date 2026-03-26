@@ -39,6 +39,8 @@ from pq_wiki.import_log import get_import_logger
 from pq_wiki.loot_tier_icons import build_drop_tier_icon_parts_map, build_drop_tier_wikitext_map
 from pq_wiki.skin_rarity_icons import build_skin_rarity_wikitext_map
 from pq_wiki.render_pages import (
+    account_stat_page_path,
+    build_account_stat_wikitext,
     build_entity_wikitext,
     build_item_wikitext,
     build_location_wikitext,
@@ -182,6 +184,7 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
     items = data.get("Items") or []
     locations = data.get("Locations") or []
     game_objects = data.get("GameObjects") or []
+    account_stats = data.get("AccountStats") or []
     overrides = load_overrides()
     skip_items = overrides["skip"]["items"]
     skip_locations = overrides["skip"]["locations"]
@@ -239,15 +242,17 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
     all_entities = [go for go in game_objects if go.get("IsEntity", True)]
     entities_to_process = all_entities[:nlim] if nlim else all_entities
     skins_to_process = character_skins[:nlim] if nlim else character_skins
+    account_stats_to_process = account_stats[:nlim] if nlim else account_stats
 
     if nlim:
         log.info(
-            "GENERATE_FEW_PAGES cap %d per type: importing %d items, %d locations, %d entities, %d skins",
+            "GENERATE_FEW_PAGES cap %d per type: importing %d items, %d locations, %d entities, %d skins, %d account stats",
             nlim,
             len(items_to_process),
             len(locations_to_process),
             len(entities_to_process),
             len(skins_to_process),
+            len(account_stats_to_process),
         )
 
     item_name_to_id: dict[str, int] = {}
@@ -348,6 +353,12 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
         skin_id_to_path[sid] = _with_unreleased_namespace(base, is_unreleased)
     skin_id_to_skin: dict[int, dict[str, Any]] = {int(s["Id"]): s for s in character_skins}
 
+    account_stat_id_to_path: dict[int, str] = {}
+    for st in sorted(account_stats, key=lambda x: x["Id"]):
+        sid = int(st["Id"])
+        base = account_stat_page_path(st, used_paths_public)
+        account_stat_id_to_path[sid] = base
+
     old_cached = load_cached_datadump()
     last_state = read_last_import_state() or {}
     ci: set[int] = set()
@@ -386,20 +397,39 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
     stats: dict[str, int] = {}
     errors: list[str] = []
 
+    def _work_list(
+        rows: list[dict[str, Any]],
+        id_set: set[int],
+    ) -> list[dict[str, Any]]:
+        if import_full:
+            return rows
+        return [r for r in rows if int(r["Id"]) in id_set]
+
+    items_work = _work_list(items_to_process, ci)
+    locations_work = _work_list(locations_to_process, cl)
+    entities_work = _work_list(entities_to_process, ce)
+    skins_work = _work_list(skins_to_process, cs)
+    # Keep account stats fully refreshed; list is small and currently outside incremental diff sets.
+    account_stats_work = account_stats_to_process
+
     def _one(
         kind: str,
         title: str,
         build,
         save,
+        *,
+        progress: str | None = None,
     ) -> None:
         t0 = time.perf_counter()
+        prefix = f"[{progress}] " if progress else ""
         try:
             skip = peek_skip_build_reason(site, title, WIKI_BOT_USER, FORCE_OVERWRITE)
             if skip:
                 t1 = time.perf_counter()
                 stats[skip] = stats.get(skip, 0) + 1
                 log.info(
-                    "%s %s | result=%s | build=%.0fms save=%.0fms total=%.0fms",
+                    "%s%s %s | result=%s | build=%.0fms save=%.0fms total=%.0fms",
+                    prefix,
                     kind,
                     title,
                     skip,
@@ -416,7 +446,8 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
             save_ms = (t2 - t1) * 1000
             stats[r] = stats.get(r, 0) + 1
             log.info(
-                "%s %s | result=%s | build=%.0fms save=%.0fms total=%.0fms",
+                "%s%s %s | result=%s | build=%.0fms save=%.0fms total=%.0fms",
+                prefix,
                 kind,
                 title,
                 r,
@@ -426,11 +457,10 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
             )
         except Exception:
             errors.append(f"{kind} {title}")
-            log.error("FAILED %s %s\n%s", kind, title, traceback.format_exc())
+            log.error("FAILED %s%s %s\n%s", prefix, kind, title, traceback.format_exc())
 
-    for it in items_to_process:
-        if not import_full and int(it["Id"]) not in ci:
-            continue
+    n_items = len(items_work)
+    for idx, it in enumerate(items_work, start=1):
         path = item_id_to_path[it["Id"]]
         name = it.get("Name", it["Id"])
 
@@ -458,11 +488,16 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
         def save_item(s, ttl, txt, ver, user, k):
             return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=FORCE_OVERWRITE)
 
-        _one("item", path, build_item, save_item)
+        _one(
+            "item",
+            path,
+            build_item,
+            save_item,
+            progress=f"{idx}/{n_items}",
+        )
 
-    for loc in locations_to_process:
-        if not import_full and int(loc["Id"]) not in cl:
-            continue
+    n_locs = len(locations_work)
+    for idx, loc in enumerate(locations_work, start=1):
         path = location_id_to_path[loc["Id"]]
         name = loc.get("Name", loc["Id"])
 
@@ -484,11 +519,16 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
         def save_loc(s, ttl, txt, ver, user, k):
             return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=FORCE_OVERWRITE)
 
-        _one("location", path, build_loc, save_loc)
+        _one(
+            "location",
+            path,
+            build_loc,
+            save_loc,
+            progress=f"{idx}/{n_locs}",
+        )
 
-    for go in entities_to_process:
-        if not import_full and int(go["Id"]) not in ce:
-            continue
+    n_entities = len(entities_work)
+    for idx, go in enumerate(entities_work, start=1):
         path = entity_id_to_path[go["Id"]]
         name = go.get("Name", go["Id"])
 
@@ -518,11 +558,16 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
         def save_ent(s, ttl, txt, ver, user, k):
             return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=FORCE_OVERWRITE)
 
-        _one("entity", path, build_go, save_ent)
+        _one(
+            "entity",
+            path,
+            build_go,
+            save_ent,
+            progress=f"{idx}/{n_entities}",
+        )
 
-    for sk in skins_to_process:
-        if not import_full and int(sk["Id"]) not in cs:
-            continue
+    n_skins = len(skins_work)
+    for idx, sk in enumerate(skins_work, start=1):
         path = skin_id_to_path[int(sk["Id"])]
         name = sk.get("Name", sk["Id"])
 
@@ -537,7 +582,31 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
         def save_skin(s, ttl, txt, ver, user, k):
             return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=FORCE_OVERWRITE)
 
-        _one("skin", path, build_skin, save_skin)
+        _one(
+            "skin",
+            path,
+            build_skin,
+            save_skin,
+            progress=f"{idx}/{n_skins}",
+        )
+
+    n_account_stats = len(account_stats_work)
+    for idx, st in enumerate(account_stats_work, start=1):
+        path = account_stat_id_to_path[int(st["Id"])]
+
+        def build_account_stat(s=st):
+            return build_account_stat_wikitext(s, version)
+
+        def save_account_stat(s, ttl, txt, ver, user, k):
+            return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=FORCE_OVERWRITE)
+
+        _one(
+            "account_stat",
+            path,
+            build_account_stat,
+            save_account_stat,
+            progress=f"{idx}/{n_account_stats}",
+        )
 
     if not errors:
         write_cached_datadump(datadump_path)

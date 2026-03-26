@@ -3,8 +3,8 @@ from __future__ import annotations
 import pywikibot
 
 from pq_wiki.roblox_assets import fetch_asset_bytes, parse_asset_id
-from pq_wiki.sprites import content_hash
-from pq_wiki.texture_service import upload_raw_bytes_fixed_hash
+from pq_wiki.texture_names import difficulty_skull_base
+from pq_wiki.texture_service import upload_raw_bytes_named
 
 
 def build_difficulty_skull_wikitext(
@@ -21,12 +21,11 @@ def build_difficulty_skull_wikitext(
     if not aid:
         return ""
     raw = fetch_asset_bytes(aid)
-    key = content_hash(f"difficulty-skull:{aid}:{size_px}")
-    return upload_raw_bytes_fixed_hash(
+    return upload_raw_bytes_named(
         site,
         raw,
         "png",
-        content_key=key,
-        version=version,
+        difficulty_skull_base(),
+        version,
         thumb_size=size_px,
     )

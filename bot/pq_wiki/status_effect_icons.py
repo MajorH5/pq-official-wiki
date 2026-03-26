@@ -7,8 +7,8 @@ import pywikibot
 from PIL import Image
 
 from pq_wiki.roblox_assets import fetch_asset_bytes, parse_asset_id
-from pq_wiki.sprites import content_hash
-from pq_wiki.texture_service import upload_raw_bytes_fixed_hash
+from pq_wiki.texture_names import status_effect_base
+from pq_wiki.texture_service import upload_raw_bytes_named
 
 _ICON_SIZE = 16
 
@@ -85,13 +85,12 @@ def build_status_effect_icon_wikitext_map(
         buf = io.BytesIO()
         icon.save(buf, format="PNG")
         data = buf.getvalue()
-        key = content_hash(f"status-icon:{aid}:{name}:{x}:{y}:{_ICON_SIZE}")
-        w = upload_raw_bytes_fixed_hash(
+        w = upload_raw_bytes_named(
             site,
             data,
             "png",
-            content_key=key,
-            version=version,
+            status_effect_base(name),
+            version,
             thumb_size=_ICON_SIZE,
         )
         if w:

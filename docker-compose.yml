@@ -1,4 +1,4 @@
-name: pqwiki
+# name: pqwiki
 
 services:
   database:
@@ -14,6 +14,8 @@ services:
     container_name: mediawiki
     build: ./mediawiki
     restart: always
+    env_file:
+      - .env
     ports:
       - "8080:80"
     depends_on:
@@ -22,6 +24,8 @@ services:
       - images:/var/www/html/images
       - ./uploads.ini:/usr/local/etc/php/conf.d/uploads.ini
       - ./LocalSettings.php:/var/www/html/LocalSettings.php
+      # Optional: pq-datadump.json for Roblox profile item/skin lookups (set PQ_DATADUMP_PATH=/var/www/html/pq-datadump.json)
+      - ./pq-datadump.json:/var/www/html/pq-datadump.json:ro
 
   pqwikibot:
     container_name: wikibot

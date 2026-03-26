@@ -1,0 +1,514 @@
+.pq-roblox-muted {
+	color: #72777d;
+}
+
+.pq-roblox-profile-tabs {
+	margin: 0.75em 0 1em;
+}
+
+.pq-roblox-tablist {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin-bottom: 0.65em;
+	border-bottom: 1px solid #c8ccd1;
+	padding-bottom: 4px;
+}
+
+.pq-roblox-tab {
+	background: #f8f9fa;
+	border: 1px solid #c8ccd1;
+	border-radius: 4px 4px 0 0;
+	padding: 0.35em 0.75em;
+	cursor: pointer;
+	font: inherit;
+	color: #0645ad;
+}
+
+.pq-roblox-tab:hover {
+	background: #eaecf0;
+}
+
+.pq-roblox-tab.is-active {
+	background: #fff;
+	border-bottom-color: #fff;
+	margin-bottom: -1px;
+	padding-bottom: calc(0.35em + 1px);
+	font-weight: 600;
+	color: #202122;
+}
+
+.pq-roblox-tabpanel {
+	padding-top: 0.25em;
+}
+
+.pq-roblox-panel-hidden {
+	margin: 0.35em 0 0;
+	font-style: italic;
+}
+
+.pq-roblox-profile-lead {
+	margin: 0.35em 0 0.5em;
+	font-size: 1.05em;
+}
+
+.pq-roblox-account-valor {
+	margin: 0.15em 0 0.5em;
+}
+
+.pq-roblox-last-seen {
+	margin: 0.15em 0 0.5em;
+}
+
+.pq-roblox-last-seen-line {
+	margin: 0.12em 0;
+}
+
+.pq-roblox-online-dot {
+	display: inline-block;
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	vertical-align: middle;
+	margin-left: 6px;
+}
+
+.pq-roblox-online-dot.is-online {
+	background: #34a853;
+}
+
+.pq-roblox-online-dot.is-offline {
+	background: #d93025;
+}
+
+/* Centered, compact character table (not full viewport width) */
+.pq-roblox-characters-wrap {
+	margin: 0.35em 0 0;
+	width: auto;
+	max-width: 100%;
+}
+
+.pq-roblox-characters {
+	width: auto;
+	max-width: 100%;
+	margin: 0;
+	table-layout: fixed;
+}
+
+.pq-roblox-characters th,
+.pq-roblox-characters td {
+	padding: 0.35em 0.45em;
+	vertical-align: middle;
+}
+
+.pq-roblox-characters th {
+	white-space: nowrap;
+}
+
+.pq-roblox-characters .pq-roblox-col-name {
+	width: 11em;
+	max-width: 14em;
+	text-align: left !important;
+}
+
+.pq-roblox-characters .pq-roblox-col-lvl,
+.pq-roblox-characters .pq-roblox-col-valor {
+	width: 3.25em;
+	max-width: 4.5em;
+}
+
+.pq-roblox-characters .pq-roblox-col-eq {
+	width: 11.5em;
+	max-width: 12.5em;
+}
+
+/*
+ * Two 4×2 grids (8 + 8 cells) + gap — main inventory + backpack on one row, no wrap between them.
+ * Extra slack (+1.25em) for td padding, borders, and subpixel rounding. Third+ chunks still wrap when slot count > 16.
+ */
+.pq-roblox-characters .pq-roblox-col-inv {
+	min-width: calc((4 * 44px + 3 * 4px) * 2 + 0.65em + 1.25em);
+	max-width: none;
+	width: calc((4 * 44px + 3 * 4px) * 2 + 0.65em + 1.25em);
+}
+
+.pq-roblox-characters .pq-roblox-col-inv .pq-roblox-inv-bundles {
+	max-width: none;
+}
+
+/* Do not let flexbox shrink grids below their intrinsic width (was causing backpack to wrap early) */
+.pq-roblox-inv-chunk {
+	flex-shrink: 0;
+}
+
+.pq-roblox-td-c {
+	text-align: center;
+}
+
+.pq-roblox-td-tight {
+	padding: 0.28em 0.45em;
+}
+
+.pq-roblox-name-cell {
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	flex-wrap: wrap;
+	gap: 0.3em;
+}
+
+.pq-roblox-char-name {
+	font-weight: 600;
+}
+
+.pq-roblox-ico {
+	vertical-align: middle;
+	border-radius: 2px;
+	image-rendering: pixelated;
+	image-rendering: -moz-crisp-edges;
+	image-rendering: crisp-edges;
+}
+
+.pq-roblox-stat-ico-img {
+	vertical-align: middle;
+	image-rendering: pixelated;
+	image-rendering: -moz-crisp-edges;
+	image-rendering: crisp-edges;
+	flex-shrink: 0;
+}
+
+.pq-roblox-stats-block {
+	display: flex;
+	gap: 0.55em;
+	align-items: flex-start;
+	max-width: 20em;
+}
+
+.pq-roblox-characters .pq-roblox-td-stats {
+	min-width: 12em;
+	max-width: 20em;
+	vertical-align: top;
+}
+
+.pq-roblox-grave .pq-roblox-td-stats {
+	min-width: 12em;
+	max-width: 20em;
+	vertical-align: top;
+}
+
+.pq-roblox-td-stats .pq-roblox-stats-block {
+	max-width: none;
+}
+
+.pq-roblox-stats-col {
+	flex: 1;
+	min-width: 0;
+}
+
+.pq-roblox-stat-line {
+	display: flex;
+	align-items: center;
+	gap: 0.2em;
+	margin-bottom: 0.1em;
+	font-size: 0.92em;
+}
+
+.pq-roblox-stat-abbr {
+	font-weight: 600;
+	min-width: 1.75em;
+	color: #54595d;
+}
+
+.pq-roblox-stat-val {
+	margin-left: auto;
+	font-variant-numeric: tabular-nums;
+}
+
+.pq-roblox-valor-with-ico {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35em;
+}
+
+.pq-roblox-valor-ico-img {
+	flex-shrink: 0;
+	image-rendering: pixelated;
+	image-rendering: -moz-crisp-edges;
+	image-rendering: crisp-edges;
+}
+
+.pq-roblox-eq-cell {
+	display: flex;
+	justify-content: center;
+	width: 100%;
+}
+
+.pq-roblox-eq-row {
+	display: flex;
+	flex-wrap: nowrap;
+	gap: 3px;
+	align-items: center;
+	justify-content: center;
+}
+
+/* Position tier badge like inventory slots */
+.pq-roblox-eq-slot {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 44px;
+	height: 44px;
+	flex-shrink: 0;
+}
+
+.pq-roblox-eq-slot a {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	line-height: 0;
+}
+
+.pq-roblox-eq-empty {
+	display: inline-block;
+	width: 40px;
+	height: 40px;
+	box-sizing: border-box;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	background: #f8f9fa;
+	vertical-align: middle;
+}
+
+.pq-roblox-inv-bundles {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	gap: 0.65em;
+}
+
+.pq-roblox-inv-chunk-backpack {
+	margin-left: 0.15em;
+}
+
+.pq-roblox-inv-grid-4x2 {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(40px, 44px));
+	grid-template-rows: repeat(2, auto);
+	gap: 4px;
+}
+
+.pq-roblox-inv-slot {
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 44px;
+	height: 44px;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	box-sizing: border-box;
+}
+
+.pq-roblox-inv-slot-empty {
+	background: #f8f9fa;
+	border-style: dashed;
+}
+
+.pq-roblox-inv-slot a {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	line-height: 0;
+}
+
+.pq-roblox-inv-qty {
+	position: absolute;
+	top: 1px;
+	right: 1px;
+	padding: 0.1em 0.2em;
+	font-size: 0.72em;
+	line-height: 1.1;
+	font-weight: 700;
+	color: #202122;
+	background: rgba(255, 255, 255, 0.92);
+	border: 1px solid rgba(0, 0, 0, 0.12);
+	border-radius: 3px;
+	box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6) inset;
+	z-index: 2;
+}
+
+.pq-roblox-inv-tier {
+	position: absolute;
+	bottom: 1px;
+	right: 1px;
+	z-index: 1;
+	image-rendering: pixelated;
+	image-rendering: -moz-crisp-edges;
+	image-rendering: crisp-edges;
+}
+
+.pq-roblox-skin-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(44px, 44px));
+	gap: 4px;
+	margin: 0.35em 0 0;
+}
+
+.pq-roblox-skin-cell {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 2px;
+}
+
+.pq-roblox-skin-cell .pq-roblox-inv-slot {
+	border-color: #c8ccd1;
+}
+
+.pq-roblox-skin-locked {
+	filter: grayscale(1);
+	opacity: 0.45;
+}
+
+.pq-roblox-vault-grid {
+	display: grid;
+	grid-template-columns: repeat(8, minmax(40px, 44px));
+	gap: 4px;
+	margin: 0.35em 0 0;
+	max-width: calc(8 * 44px + 7 * 4px);
+}
+
+.pq-roblox-vault-filters {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	align-items: center;
+	margin: 0.25em 0 0.35em;
+}
+
+.pq-roblox-vault-filters input[type="text"] {
+	width: 14em;
+	max-width: 100%;
+}
+
+.pq-roblox-vault-filters select {
+	max-width: 100%;
+}
+
+.pq-roblox-vault-filters button {
+	padding: 0.25em 0.6em;
+}
+
+.pq-roblox-grave th,
+.pq-roblox-grave td {
+	padding: 0.35em 0.45em;
+	vertical-align: middle;
+}
+
+.pq-roblox-pager-links {
+	margin-top: 0.5em;
+}
+
+.pq-roblox-pager-links {
+	display: flex;
+	align-items: center;
+	gap: 0.5em;
+	flex-wrap: wrap;
+}
+
+.pq-roblox-pager-mid {
+	margin: 0 0.1em;
+	font-variant-numeric: tabular-nums;
+}
+
+.pq-roblox-control-link,
+.pq-roblox-control-btn {
+	display: inline-block;
+	background: #f8f9fa;
+	border: 1px solid #c8ccd1;
+	border-radius: 4px;
+	padding: 0.28em 0.65em;
+	color: #0645ad;
+	text-decoration: none;
+	line-height: 1.25;
+}
+
+.pq-roblox-control-link.is-disabled {
+	opacity: 0.5;
+	pointer-events: none;
+	color: #54595d;
+}
+
+.pq-roblox-control-link:hover,
+.pq-roblox-control-btn:hover {
+	background: #eaecf0;
+	text-decoration: none;
+}
+
+.pq-roblox-control-btn {
+	cursor: pointer;
+	font: inherit;
+}
+
+.pq-roblox-control-input {
+	border: 1px solid #c8ccd1;
+	border-radius: 4px;
+	padding: 0.28em 0.5em;
+	background: #fff;
+}
+
+.pq-roblox-pager-links .pq-roblox-control-link {
+	margin-left: 0;
+}
+
+.pq-roblox-filterbar {
+	margin: 0.25em 0 0.5em;
+}
+
+.pq-roblox-filterbar-title {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35em;
+	margin: 0 0 0.35em;
+	color: #72777d;
+}
+
+.pq-roblox-filter-tabs {
+	margin-bottom: 0;
+}
+
+.pq-roblox-filter-tab {
+	border-radius: 4px;
+}
+
+.pq-roblox-filter-tab.is-active {
+	background: #fff;
+	border-color: #36c;
+	color: #202122;
+	font-weight: 700;
+	box-shadow: inset 0 0 0 1px rgba(54, 108, 217, 0.18);
+}
+
+a.pq-roblox-filter-tab {
+	background: #f8f9fa;
+	color: #0645ad;
+}
+
+a.pq-roblox-filter-tab:hover {
+	background: #eaecf0;
+}
+
+.pq-roblox-prefs-hint {
+	margin: 0.35em 0 0.6em;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5em;
+	align-items: center;
+}
+
+.pq-roblox-prefs-hint.is-bottom {
+	margin-top: 1em;
+	padding-top: 0.65em;
+	border-top: 1px solid #c8ccd1;
+}

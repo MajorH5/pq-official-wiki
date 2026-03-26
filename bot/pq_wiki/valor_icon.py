@@ -9,8 +9,8 @@ import pywikibot
 from PIL import Image
 
 from pq_wiki.roblox_assets import fetch_asset_bytes, parse_asset_id
-from pq_wiki.sprites import content_hash
-from pq_wiki.texture_service import upload_raw_bytes_fixed_hash
+from pq_wiki.texture_names import valor_icon_base
+from pq_wiki.texture_service import upload_raw_bytes_named
 
 # imageRectSize = Vector2.new((8 + 2), (8 + 2)) * 2  → 20×20
 # imageRectOffset = Vector2.new(2, 0) * ((8 + 2) * 2) → (40, 0)
@@ -56,13 +56,12 @@ def build_valor_icon_wikitext(
     buf = io.BytesIO()
     icon.save(buf, format="PNG")
     data = buf.getvalue()
-    key = content_hash(f"valor-icon:{aid}:{_VALOR_CROP_X}:{_VALOR_CROP_Y}:{_VALOR_SIZE}")
-    return upload_raw_bytes_fixed_hash(
+    return upload_raw_bytes_named(
         site,
         data,
         "png",
-        content_key=key,
-        version=version,
+        valor_icon_base(),
+        version,
         thumb_size=thumb_size,
     )
 

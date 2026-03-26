@@ -5,6 +5,7 @@ from typing import Any
 
 import pywikibot
 
+from pq_wiki.texture_names import entity_sprite_base
 from pq_wiki.texture_service import upload_sprite_if_possible
 
 
@@ -129,7 +130,14 @@ def format_item_drop_sources_wikitext(
         go = entity_id_to_go.get(s.entity_id)
         icon = ""
         if go:
-            icon = upload_sprite_if_possible(site, go.get("Sprite"), version, thumb_size=40)
+            nm = str(go.get("Name") or f"Entity {s.entity_id}")
+            icon = upload_sprite_if_possible(
+                site,
+                go.get("Sprite"),
+                version,
+                thumb_size=40,
+                logical_name=entity_sprite_base(s.entity_id, nm),
+            )
         if icon and s.entity_path:
             icon = _link_image_wikitext(icon, s.entity_path)
         enemy = f"[[{s.entity_path}|{s.entity_name}]]" if s.entity_path else s.entity_name

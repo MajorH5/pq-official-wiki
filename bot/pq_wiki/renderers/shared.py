@@ -9,6 +9,35 @@ def green(s: str) -> str:
     return f'<span style="color:green">{s}</span>'
 
 
+def red(s: str) -> str:
+    return f'<span style="color:red">{s}</span>'
+
+
+def signed_delta(v: Any, *, bold: bool = False) -> str:
+    """
+    Format a numeric delta with correct sign + color.
+    Positive: +N (green)
+    Negative: -N (red)
+    Zero/unknown: N (no forced plus; green for 0)
+    """
+    if not isinstance(v, (int, float)) or isinstance(v, bool):
+        try:
+            v = float(v)
+        except Exception:
+            return str(v)
+    num = float(v)
+    inner = fmt_num(int(num) if num.is_integer() else num)
+    if num > 0:
+        inner = f"+{inner}"
+        inner = f"'''{inner}'''" if bold else inner
+        return green(inner)
+    if num < 0:
+        # fmt_num already contains the '-' sign
+        inner = f"'''{inner}'''" if bold else inner
+        return red(inner)
+    inner = f"'''{inner}'''" if bold else inner
+    return green(inner)
+
 def link_entity(
     name: str,
     go_name_to_id: Optional[dict[str, int]],

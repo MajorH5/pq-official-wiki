@@ -6,6 +6,14 @@ import pywikibot
 from pq_wiki.renderers.shared import fmt_range, format_drop
 from pq_wiki.seo import first_wiki_filename_from_file_wikitext, wiki_seo_block
 from pq_wiki.skin_drops import format_skin_drop_cell
+from pq_wiki.texture_names import (
+    entity_sprite_base,
+    item_sprite_base,
+    portal_preview_base,
+    projectile_sprite_base,
+    slug,
+    tier_icon_filename_base,
+)
 from pq_wiki.texture_service import upload_portal_preview, upload_projectile_sprite, upload_sprite_if_possible
 from pq_wiki.wikitext_util import (
     defense_penetration_attack_line_html,
@@ -63,7 +71,9 @@ def build_entity_wikitext(
         or go.get("IsWorldBoss")
     )
 
-    icon = upload_sprite_if_possible(site, go.get("Sprite"), version)
+    icon = upload_sprite_if_possible(
+        site, go.get("Sprite"), version, logical_name=entity_sprite_base(gid, str(name))
+    )
 
     hp = go.get("Health")
     stats = go.get("Stats") or {}
@@ -268,7 +278,13 @@ def _format_spawned_entity_line(
     if not child or not path:
         return ""
     nm = str(child.get("Name") or f"Entity {eid}")
-    icon = upload_sprite_if_possible(site, child.get("Sprite"), version, thumb_size=40)
+    icon = upload_sprite_if_possible(
+        site,
+        child.get("Sprite"),
+        version,
+        thumb_size=40,
+        logical_name=entity_sprite_base(eid, nm),
+    )
     if icon:
         icon = _link_image_wikitext(icon, path)
     label = f"[[{path}|{nm}]]"
@@ -609,7 +625,17 @@ def _attack_image_for_projectile(site: pywikibot.Site, p: dict, version: str) ->
     except (TypeError, ValueError):
         pass
     ps = p.get("Sprite")
-    return upload_projectile_sprite(site, ps, version, max_thumb_size=90) if ps else ""
+    return (
+        upload_projectile_sprite(
+            site,
+            ps,
+            version,
+            max_thumb_size=90,
+            logical_name=projectile_sprite_base(ps),
+        )
+        if ps
+        else ""
+    )
 
 
 def _aoe_marker(color: object) -> str:
@@ -674,7 +700,13 @@ def _render_enemy_drop_entry(
             it = item_id_to_item.get(iid) if item_id_to_item else None
             icon = ""
             if it:
-                icon = upload_sprite_if_possible(site, it.get("Sprite"), version, thumb_size=40)
+                icon = upload_sprite_if_possible(
+                    site,
+                    it.get("Sprite"),
+                    version,
+                    thumb_size=40,
+                    logical_name=item_sprite_base(iid, str(it.get("Name") or f"Item {iid}")),
+                )
                 if icon and path:
                     icon = _link_image_wikitext(icon, path)
             label = f"[[{path}|{val}]]" if path else val
@@ -693,7 +725,13 @@ def _render_enemy_drop_entry(
                 continue
             nm = str(it.get("Name") or f"Item {iid}")
             path = item_id_to_path.get(iid)
-            icon = upload_sprite_if_possible(site, it.get("Sprite"), version, thumb_size=40)
+            icon = upload_sprite_if_possible(
+                site,
+                it.get("Sprite"),
+                version,
+                thumb_size=40,
+                logical_name=item_sprite_base(iid, str(it.get("Name") or f"Item {iid}")),
+            )
             if icon and path:
                 icon = _link_image_wikitext(icon, path)
             if icon:
@@ -806,7 +844,13 @@ def _found_in_location_cell(
     portal = None
     if location_name_to_portal:
         portal = location_name_to_portal.get(loc_name)
-    pimg = upload_portal_preview(site, portal, version) if portal else ""
+    pimg = (
+        upload_portal_preview(
+            site, portal, version, logical_name=portal_preview_base(slug(loc_name))
+        )
+        if portal
+        else ""
+    )
     path = location_name_to_path.get(loc_name) if location_name_to_path else None
     if pimg and path:
         pimg = _link_image_wikitext(pimg, path)
@@ -1044,14 +1088,27 @@ def _render_drop_item_icon_with_tier(
     version: str,
     page_path: str | None,
 ) -> str:
-    base_icon = upload_sprite_if_possible(site, item.get("Sprite"), version, thumb_size=40)
+    iid = int(item.get("Id") or 0)
+    base_icon = upload_sprite_if_possible(
+        site,
+        item.get("Sprite"),
+        version,
+        thumb_size=40,
+        logical_name=item_sprite_base(iid, str(item.get("Name") or f"Item {iid}")),
+    )
     if not base_icon:
         return ""
     if page_path:
         base_icon = _link_image_wikitext(base_icon, page_path)
     tier_icon = ""
     if item.get("TierIcon"):
-        tier_icon = upload_sprite_if_possible(site, item.get("TierIcon"), version, thumb_size=16)
+        tier_icon = upload_sprite_if_possible(
+            site,
+            item.get("TierIcon"),
+            version,
+            thumb_size=16,
+            logical_name=tier_icon_filename_base(item["TierIcon"]),
+        )
         if tier_icon and page_path:
             tier_icon = _link_image_wikitext(tier_icon, page_path)
     if not tier_icon:

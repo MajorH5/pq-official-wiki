@@ -1,0 +1,43 @@
+{
+	"name": "PixelQuestRoblox",
+	"author": "Pixel Quest Wiki",
+	"url": "https://github.com/",
+	"description": "Roblox account linking (temporary codes, wiki UI, Open Cloud Messaging Service).",
+	"license-name": "GPL-2.0-or-later",
+	"type": "extension",
+	"manifest_version": 2,
+	"requires": {
+		"MediaWiki": ">= 1.42.0"
+	},
+	"AutoloadNamespaces": {
+		"PixelQuestRoblox\\": "includes/"
+	},
+	"Hooks": {
+		"LoadExtensionSchemaUpdates": "PixelQuestRoblox\\Hooks::onLoadExtensionSchemaUpdates",
+		"GetPreferences": "PixelQuestRoblox\\Hooks::onGetPreferences",
+		"UserGetDefaultOptions": "PixelQuestRoblox\\Hooks::onUserGetDefaultOptions"
+	},
+	"SpecialPages": {
+		"LinkRobloxAccount": "PixelQuestRoblox\\SpecialLinkRobloxAccount",
+		"RobloxProfile": "PixelQuestRoblox\\SpecialRobloxProfile",
+		"RobloxProfiles": "PixelQuestRoblox\\SpecialRobloxProfiles"
+	},
+	"APIModules": {
+		"pqrobloxrequestcode": "PixelQuestRoblox\\Api\\ApiPqRobloxRequestCode"
+	},
+	"MessagesDirs": {
+		"PixelQuestRoblox": [
+			"i18n"
+		]
+	},
+	"ResourceModules": {
+		"ext.pqroblox.profile": {
+			"styles": "resources/ext.pqroblox.profile.css",
+			"scripts": "resources/ext.pqroblox.profile.js"
+		}
+	},
+	"ResourceFileModulePaths": {
+		"localBasePath": "",
+		"remoteExtPath": "PixelQuestRoblox"
+	}
+}

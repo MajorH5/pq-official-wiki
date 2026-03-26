@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import pywikibot
 
-from pq_wiki.sprites import character_skin_animation_first_frame_png, content_hash
-from pq_wiki.texture_service import upload_raw_bytes_fixed_hash
+from pq_wiki.sprites import character_skin_animation_first_frame_png
+from pq_wiki.texture_names import skin_drop_idle_preview_base
+from pq_wiki.texture_service import upload_raw_bytes_named
 
 
 def _inject_file_link_target(img_wiki: str, page_path: str) -> str:
@@ -30,8 +31,8 @@ def format_skin_drop_cell(
     png = character_skin_animation_first_frame_png(sk, "e_idle")
     if not png:
         return ""
-    key = content_hash(f"skin_drop_idle:{sid}")
-    base = upload_raw_bytes_fixed_hash(site, png, "png", content_key=key, version=version, thumb_size=40)
+    sk_name = str(sk.get("Name") or f"Skin {sid}")
+    base = upload_raw_bytes_named(site, png, "png", skin_drop_idle_preview_base(sid, sk_name), version, thumb_size=40)
     if not base:
         return ""
     base = _inject_file_link_target(base, path)

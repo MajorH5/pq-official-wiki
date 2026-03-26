@@ -7,8 +7,8 @@ import pywikibot
 from PIL import Image
 
 from pq_wiki.roblox_assets import fetch_asset_bytes, parse_asset_id
-from pq_wiki.sprites import content_hash
-from pq_wiki.texture_service import upload_raw_bytes_fixed_hash
+from pq_wiki.texture_names import stat_icon_base
+from pq_wiki.texture_service import upload_raw_bytes_named
 
 # Canonical stat order in the 18x18 strip row.
 STAT_INDEX_MAP = {
@@ -60,13 +60,12 @@ def build_stat_icon_wikitext_map(
         buf = io.BytesIO()
         icon.save(buf, format="PNG")
         data = buf.getvalue()
-        key = content_hash(f"stat-icon:{aid}:{stat}:{_ICON_SIZE}:{_ICON_ROW_Y}")
-        w = upload_raw_bytes_fixed_hash(
+        w = upload_raw_bytes_named(
             site,
             data,
             "png",
-            content_key=key,
-            version=version,
+            stat_icon_base(stat),
+            version,
             thumb_size=_ICON_SIZE,
         )
         if w:

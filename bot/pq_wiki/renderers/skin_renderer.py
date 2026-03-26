@@ -7,16 +7,17 @@ from PIL import Image
 
 from pq_wiki.roblox_assets import fetch_asset_bytes, parse_asset_id
 from pq_wiki.sprites import (
-    content_hash,
     get_texture_url,
     normalize_gif_bytes_for_imagemagick,
     render_animation_to_gif_bytes,
 )
 from pq_wiki.seo import first_wiki_filename_from_file_wikitext, plain_text_for_seo, wiki_seo_block
-from pq_wiki.texture_service import upload_raw_bytes_fixed_hash, upload_sprite_if_possible
+from pq_wiki.texture_names import skin_animation_base, skin_sprite_preview_base
+from pq_wiki.texture_service import upload_raw_bytes_named, upload_sprite_if_possible
 from pq_wiki.wikitext_util import html_to_wikitext, template_invocation
 
-_DIRECTION_ORDER = ("e", "n", "s", "w")
+# West animations aren't needed for the wiki; omit w_* to save time/uploads.
+_DIRECTION_ORDER = ("e", "n", "s")
 _ACTION_ORDER = ("idle", "walk", "attack")
 
 _DIRECTION_LABEL = {
@@ -69,16 +70,17 @@ def _upload_skin_animation_gif(
         data = render_animation_to_gif_bytes(anim, sheet, fps_override=5.0)
     except Exception:
         return ""
-    key = content_hash(f"skin_anim:{skin.get('Id')}:{anim_key}:v2_5fps")
     data = normalize_gif_bytes_for_imagemagick(data)
     sz = anim.get("Size") or {}
     fw = int(sz.get("X") or sz.get("x") or 50)
-    w = upload_raw_bytes_fixed_hash(
+    sid = int(skin.get("Id") or 0)
+    sname = str(skin.get("Name") or f"Skin {sid}")
+    w = upload_raw_bytes_named(
         site,
         data,
         "gif",
-        content_key=key,
-        version=version,
+        skin_animation_base(sid, sname, anim_key),
+        version,
         thumb_size=max(1, fw),
     )
     return w
@@ -139,7 +141,8 @@ def build_skin_wikitext(
     version: str,
     unreleased: bool = False,
 ) -> str:
-    name = str(skin.get("Name") or f"Skin {skin.get('Id')}")
+    sid = int(skin.get("Id") or 0)
+    name = str(skin.get("Name") or f"Skin {sid}")
     desc = html_to_wikitext(str(skin.get("Description") or ""))
     desc_block = f"''{desc}''" if desc else ""
     rarity = int(skin.get("Rarity") or 0)
@@ -162,7 +165,12 @@ def build_skin_wikitext(
         ],
         always_emit_keys=frozenset({"name", "head"}),
     )
-    sprite_preview = upload_sprite_if_possible(site, skin.get("Sprite"), version)
+    sprite_preview = upload_sprite_if_possible(
+        site,
+        skin.get("Sprite"),
+        version,
+        logical_name=skin_sprite_preview_base(sid, name),
+    )
     desc_plain = plain_text_for_seo(desc)
     seo_desc = (
         f"{name} — {desc_plain}. Pixel Quest Wiki character skin."

@@ -19,7 +19,11 @@ ROBLOX_COOKIE = os.environ.get("ROBLOX_COOKIE", "").strip()
 # If .env sets WIKI_BOT_USER= empty, still default — empty string would skip every page as "human".
 WIKI_BOT_USER = (os.environ.get("WIKI_BOT_USER") or "Pqadmin").strip() or "Pqadmin"
 
-DATADUMP_INGEST_SECRET = os.environ.get("DATADUMP_INGEST_SECRET", "").strip()
+# Shared server secret: prefer DATADUMP_INGEST_SECRET; fall back to PQ_API_SECRET (same as wiki Roblox API).
+DATADUMP_INGEST_SECRET = (
+	os.environ.get("DATADUMP_INGEST_SECRET", "").strip()
+	or os.environ.get("PQ_API_SECRET", "").strip()
+)
 INGEST_HOST = os.environ.get("INGEST_HOST", "0.0.0.0")
 INGEST_PORT = int(os.environ.get("INGEST_PORT", "8081"))
 

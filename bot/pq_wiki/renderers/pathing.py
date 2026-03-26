@@ -78,3 +78,12 @@ def skin_page_path(skin: dict, used_paths: set[str] | None = None) -> str:
     if used_paths is None:
         return _clean_title(skin.get("Name"), fb)
     return _claim_unique_title(skin.get("Name"), fb, sid, used_paths)
+
+
+def account_stat_page_path(stat: dict, used_paths: set[str] | None = None) -> str:
+    """Flat title for AccountStats rows (shared namespace)."""
+    sid = int(stat["Id"])
+    fb = f"Account Stat {sid}"
+    if used_paths is None:
+        return _clean_title(stat.get("Name"), fb)
+    return _claim_unique_title(stat.get("Name"), fb, sid, used_paths)

@@ -4,7 +4,8 @@ import pywikibot
 
 from pq_wiki.drop_sources import ItemDropSource, format_item_drop_sources_wikitext
 from pq_wiki.renderers.entity_renderer import _found_in_location_cell, _format_status_effects, _link_image_wikitext
-from pq_wiki.renderers.shared import fmt_range, green, link_entity
+from pq_wiki.renderers.shared import fmt_range, green, link_entity, signed_delta
+from pq_wiki.texture_names import entity_sprite_base, item_sprite_base, projectile_sprite_base, tier_icon_filename_base
 from pq_wiki.texture_service import upload_projectile_sprite, upload_sprite_if_possible
 from pq_wiki.seo import first_wiki_filename_from_file_wikitext, plain_text_for_seo, wiki_seo_block
 from pq_wiki.valor_icon import valor_label
@@ -59,10 +60,20 @@ def build_item_wikitext(
     hier_l = [str(h).lower() for h in hier]
     show_tier = ("equipment" in hier_l) or ("skin" in hier_l)
 
-    icon = upload_sprite_if_possible(site, item.get("Sprite"), version)
+    iid = int(item.get("Id") or 0)
+    iname = str(item.get("Name") or f"Item {iid}")
+    icon = upload_sprite_if_possible(
+        site, item.get("Sprite"), version, logical_name=item_sprite_base(iid, iname)
+    )
     tier_icon = ""
     if show_tier and item.get("TierIcon"):
-        tier_icon = upload_sprite_if_possible(site, item["TierIcon"], version, thumb_size=16)
+        tier_icon = upload_sprite_if_possible(
+            site,
+            item["TierIcon"],
+            version,
+            thumb_size=16,
+            logical_name=tier_icon_filename_base(item["TierIcon"]),
+        )
 
     head = ""
     if show_tier:
@@ -157,7 +168,7 @@ def build_item_wikitext(
             label = k.replace("_", " ").title()
             st_icon = _stat_icon(label, stat_icons)
             left = f"{st_icon} {label}".strip() if st_icon else label
-            rows.append((left, green(f"'''+{fmt_num(v)}'''")))
+            rows.append((left, signed_delta(v, bold=True)))
         on_equip_block = "== On equip ==\n" + wikitable(rows)
 
     weapon_block = ""
@@ -166,7 +177,7 @@ def build_item_wikitext(
         wparts: list[str] = ["== Weapon stats =="]
         ps = proj.get("Sprite")
         if ps:
-            pw = upload_projectile_sprite(site, ps, version)
+            pw = upload_projectile_sprite(site, ps, version, logical_name=projectile_sprite_base(ps))
             if pw:
                 wparts.append(f"'''Projectile:''' {pw}")
                 wparts.append("")
@@ -191,8 +202,22 @@ def build_item_wikitext(
         except (TypeError, ValueError):
             zero_projectiles = False
 
+        healing_raw = proj.get("IsHealingProjectile")
+        is_healing_projectile = False
+        if isinstance(healing_raw, bool):
+            is_healing_projectile = healing_raw
+        elif isinstance(healing_raw, (int, float)):
+            is_healing_projectile = float(healing_raw) != 0.0
+        elif isinstance(healing_raw, str):
+            is_healing_projectile = healing_raw.strip().lower() in {"1", "true", "yes", "y"}
+
+        amount_label = "Heal" if is_healing_projectile else "Damage"
+        amount_value = f"'''{fmt_range(dmin, dmax)}'''"
+        if is_healing_projectile:
+            amount_value = green(amount_value)
+
         ws_rows: list[tuple[str, str]] = [
-            ("Damage", f"'''{fmt_range(dmin, dmax)}'''"),
+            (amount_label, amount_value),
         ]
         if not zero_projectiles:
             ws_rows.append(("Range", range_txt))
@@ -356,13 +381,24 @@ def _append_numeric_and_commerce_rows(
             info_rows.append(("Robux price", fmt_num(rp)))
     except (TypeError, ValueError):
         pass
+    # Only show stack limit for stackable items.
     if "IsStackable" in item:
-        sl = item.get("StackLimit")
-        try:
-            if sl is not None and float(sl) > 0:
-                info_rows.append(("Stack limit", fmt_num(sl)))
-        except (TypeError, ValueError):
-            pass
+        is_stackable_raw = item.get("IsStackable")
+        is_stackable = False
+        if isinstance(is_stackable_raw, bool):
+            is_stackable = is_stackable_raw
+        elif isinstance(is_stackable_raw, (int, float)):
+            is_stackable = float(is_stackable_raw) > 0
+        elif isinstance(is_stackable_raw, str):
+            is_stackable = is_stackable_raw.strip().lower() in ("1", "true", "yes", "y")
+
+        if is_stackable:
+            sl = item.get("StackLimit")
+            try:
+                if sl is not None and float(sl) > 0:
+                    info_rows.append(("Stack limit", fmt_num(sl)))
+            except (TypeError, ValueError):
+                pass
     vp = item.get("ValorPrice")
     try:
         if vp is not None and float(vp) > 0:
@@ -507,7 +543,13 @@ def _format_item_link_with_sprite(
     it = item_id_to_item.get(iid) if item_id_to_item else None
     icon = ""
     if it:
-        icon = upload_sprite_if_possible(site, it.get("Sprite"), version, thumb_size=40)
+        icon = upload_sprite_if_possible(
+            site,
+            it.get("Sprite"),
+            version,
+            thumb_size=40,
+            logical_name=item_sprite_base(iid, str(it.get("Name") or f"Item {iid}")),
+        )
         if icon and path:
             icon = _link_image_wikitext(icon, path)
     label = f"[[{path}|{item_name}]]" if path else item_name
@@ -523,7 +565,9 @@ def _format_entity_link_with_sprite(
     gid = int(go["Id"])
     path = entity_id_to_path.get(gid) if entity_id_to_path else None
     name = str(go.get("Name") or gid)
-    icon = upload_sprite_if_possible(site, go.get("Sprite"), version, thumb_size=40)
+    icon = upload_sprite_if_possible(
+        site, go.get("Sprite"), version, thumb_size=40, logical_name=entity_sprite_base(gid, name)
+    )
     if icon and path:
         icon = _link_image_wikitext(icon, path)
     label = f"[[{path}|{name}]]" if path else name
