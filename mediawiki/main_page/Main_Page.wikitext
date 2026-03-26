@@ -1,79 +1,94 @@
-<!-- Pixel Quest main page. Hero: init.sh copies resources/images/hero-header.png → /images/hero-header.png -->
-<div class="pq-main-hero" style="width:100%;max-width:1200px;margin:0 auto 1.25em auto;padding-bottom:min(32vw,280px);background:url(/images/hero-header.png) center/cover no-repeat;border-radius:10px;box-shadow:0 4px 12px rgba(0,0,0,.18)"></div>
-
+{{Under Construction Banner}}
 <div style="text-align:center;margin:0 0 1.75em 0;font-size:105%">
-'''[https://www.roblox.com/games/80003276594057/Pixel-Quest Play on Roblox]''' ·
+= Welcome to Official Pixel Quest! Wiki. =
+'''A complete guide of locations, item stats, builds, and other game info.''' '''Work in Progress.'''[[File:Hero-header.png|center|frameless|404x404px]]'''[https://www.roblox.com/games/80003276594057/Pixel-Quest Play on Roblox]''' ·
 '''[https://discord.gg/pixelquest Discord]''' ·
 '''[https://www.youtube.com/@PlayPixelQuest YouTube]''' ·
 '''[https://x.com/PlayPixelQuest Twitter / X]'''
-</div>
 
-{| class="wikitable" style="width:100%;max-width:1200px;margin:0 auto 1.5em auto"
-|+ ''Placeholder — replace with your own copy''
+'''Created by:'''
+<div style="text-align:center;margin:.85em 0 0 0;font-size:100%">
+{| style="margin:0 auto;border-collapse:collapse"
+| style="padding:0 .9em;text-align:center;" | [[File:Creator-major.png|frameless|104x104px|link=https://www.roblox.com/users/51268990/profile]]
+| style="padding:0 .9em;text-align:center;" | [[File:Creator-coffv.png|frameless|104x104px|link=https://www.roblox.com/users/1825702582/profile]]
+| style="padding:0 .9em;text-align:center;" | [[File:Creator-seizari.png|frameless|104x104px|link=https://www.roblox.com/users/2758910072/profile]]
 |-
-| '''Introduction'''
-| ''(Welcome blurb, patch notes link, etc.)''
-|-
-| '''Getting started'''
-| ''(Links to guides, controls, new player tips.)''
+| style="padding:.2em .9em 0 .9em;text-align:center;" | '''[https://www.roblox.com/users/51268990/profile Major]'''
+| style="padding:.2em .9em 0 .9em;text-align:center;" | '''[https://www.roblox.com/users/1825702582/profile Coffv]'''
+| style="padding:.2em .9em 0 .9em;text-align:center;" | '''[https://www.roblox.com/users/2758910072/profile Seizari]'''
 |}
-
+</div>
+</div>
+== About ==
+Pixel Quest! is an Open world 2D perma-death MMORPG focusing on Bullet Hell combat with Roguelike elements. The game focuses on leveling your character and completing quests through defeating enemies and bosses, collecting better loot and searching for rare legendary drops! There are over 30+ dungeons, 200+ unique legendaries, 80+ bosses, 150+ unique skins. Although dying results in character loss, you are awarded with valor which you can use to become stronger, purchase items, and progress!
 == Items ==
-''One example page per type — swap names after import if titles differ. Browse links go to categories.''
-
-{| class="wikitable" style="width:100%;max-width:1200px;margin:0 auto"
-! style="width:18%" | Type
-! style="width:42%" | Example
-! style="width:40%" | Browse
+{| style="width:100%;border-collapse:separate;border-spacing:12px 12px"
+| style="width:50%;vertical-align:top" |
+{| class="wikitable" style="width:100%;margin:0"
+|+ '''[[:Category:Primary Weapon|Primary Weapons]]'''
 |-
-| '''Armor'''
-| [[Nutcracker's Coat]]
-| [[:Category:Heavy Armor|Heavy armor]]
+| style="text-align:center" | [[File:Item fire-claymore 277.png|center|frameless|50x50px]]
 |-
-| '''Weapons'''
-| [[Frost Bow]]
-| [[:Category:Bow|Bows]]
+| <div style="text-align:center;line-height:1.8;">[[File:Item hunting-bow 142.png|frameless]] [[:Category:Bow|Bows]] · [[File:Item verdant-axe 134.png|frameless]] [[:Category:Axe|Axes]] · [[File:Item rusty-broadsword 192.png|frameless]] [[:Category:Sword|Swords]] · [[File:Item elementary-staff 165.png|frameless]] [[:Category:Staff|Staves]] · [[File:Item bent-dagger 150.png|frameless]] [[:Category:Dagger|Daggers]]</div>
+|}
+| style="width:50%;vertical-align:top" |
+{| class="wikitable" style="width:100%;margin:0"
+|+ '''[[:Category:Secondary Ability|Secondary Abilities]]'''
 |-
-| '''Potions & consumables'''
-| [[Potion of Health]]
-| [[:Category:Potion|Potions]]
+| style="text-align:center" | [[File:Item cinder-bomb 200.png|center|frameless|50x50px]]
 |-
-| '''Keys'''
-| [[Zombie Cemetery Key]]
-| [[:Category:Key|Keys]]
+| <div style="text-align:center;line-height:1.8;">[[File:Item wooden-totem 231.png|frameless]] [[:Category:Totem|Totems]] · [[File:Item tattered-banner 214.png|frameless]] [[:Category:Flag|Flags]] · [[File:Item small-bomb 206.png|frameless]] [[:Category:Bomb|Bombs]] · [[File:Item ember-spell 218.png|frameless]] [[:Category:Spell|Spells]]</div>
+|}
 |-
-| '''Runes'''
-| [[Rune IV]]
-| [[:Category:Rune|Runes]]
+| style="width:50%;vertical-align:top" |
+{| class="wikitable" style="width:100%;margin:0"
+|+ '''[[:Category:Armor|Armors]]'''
 |-
-| '''Infusions'''
-| [[Dexterity Infusion]]
-| [[:Category:Infusion|Infusions]]
+| style="text-align:center" | [[File:Item fire-plated-armor 302.png|center|frameless|50x50px]]
 |-
-| '''Character skins'''
-| [[Crusader]]
-| [[:Category:Character skins|Character skins]]
+| <div style="text-align:center;line-height:1.8;">[[File:Item bronze-armor 83.png|frameless]] [[:Category:Heavy Armor|Heavy Armors]] · [[File:Item worn-leather 109.png|frameless]] [[:Category:Leather Armor|Leather Armors]] · [[File:Item nomad-s-robe 118.png|frameless]] [[:Category:Robe Armor|Robe Armors]]</div>
+|}
+| style="width:50%;vertical-align:top" |
+{| class="wikitable" style="width:100%;margin:0"
+|+ '''[[:Category:Accessory|Accessories]]'''
+|-
+| style="text-align:center" | [[File:Item fire-helm 301.png|center|frameless|50x50px]]
+|-
+| <div style="text-align:center;line-height:1.8;">[[File:Item worn-helmet 44.png|frameless]] [[:Category:Helmet|Helmets]] · [[File:Item worn-gauntlet 49.png|frameless]] [[:Category:Gauntlet|Gauntlets]] · [[File:Item worn-hat 73.png|frameless]] [[:Category:Hat|Hats]] · [[File:Item worn-bracelet 58.png|frameless]] [[:Category:Bracelet|Bracelets]] ·[[File:Item worn-pendant 54.png|frameless]] [[:Category:Pendant|Pendants]]  ·[[File:Item ezebel-s-ring 303.png|frameless]] [[:Category:Ring|Rings]]</div>
+|}
+|-
+| style="width:50%;vertical-align:top" |
+{| class="wikitable" style="width:100%;margin:0"
+|+ '''[[:Category:Consumable|Consumables]]'''
+|-
+| style="text-align:center" | [[File:Item potion-of-health 10.png|link=link=Category:Consumable|center|frameless|50x50px]][[:Category:Consumable|View all consumables]]
+|}
+| style="width:50%;vertical-align:top" |
+{| class="wikitable" style="width:100%;margin:0"
+|+ '''[[:Category:Chest|Chests]]'''
+|-
+| style="text-align:center" | [[File:Item woodland-chest 481.png|link=link=Category:Chest|center|frameless|50x50px]][[:Category:Chest|View all chests]]
+|}
 |}
 
-== Locations ==
-''Spotlight — add or replace links as you like.''
-
-<div style="text-align:center;max-width:1200px;margin:0 auto;line-height:1.8">
-[[Haven]] · [[Tutorial]] · [[Fetid Swamp]] · [[Seer's Sanctum]] · [[Magic Crypt]] · [[Crystal Depths]]
-</div>
-
-== Bosses ==
-''Spotlight — notable dungeon / world bosses.''
-
-<div style="text-align:center;max-width:1200px;margin:0 auto;line-height:1.8">
-[[Ahi the Wyrmm]] · [[Rotwood the Swamp Warden]] · [[Pirate Captain]] · [[Seer the Corrupted]] · [[Zeal the Sorcerer King]] · [[Inferno God]]
-</div>
-
-{{#seo:
- |title=Pixel Quest Wiki
- |title_mode=append
- |description=Pixel Quest Wiki — items, locations, enemies, dungeons, and character skins.
- |image={{SERVER}}/images/default-preview.png
- |image_alt=Pixel Quest Wiki
- |twitter_card=summary_large_image
-}}
+== Dungeons ==
+{| class="wikitable" style="width:100%;margin:0 0 1em 0"
+|-
+| style="width:64px;text-align:center;vertical-align:middle;white-space:nowrap;" | [[File:Skull difficulty.png|frameless|50x50px]]
+| style="text-align:left;vertical-align:middle;padding:.3em .5em;" |
+{| style="border-collapse:collapse;margin:0;"
+| style="padding:0 1.15em .2em 0;text-align:left;vertical-align:top;" | [[File:Portal pirate-island.gif|frameless|90x90px|link=Pirate Island]]
+| style="padding:0 .35em .2em 0;text-align:left;vertical-align:top;" | [[File:Portal mermaid-cove.gif|frameless|90x90px|link=Mermaid Cove]]
+|-
+| style="padding:.15em 1.15em 0 0;text-align:left;" | [[Pirate Island]]
+| style="padding:.15em .35em 0 0;text-align:left;" | [[Mermaid Cove]]
+|}
+|-
+| style="text-align:center;vertical-align:middle;white-space:nowrap;" | [[File:Skull difficulty.png|frameless|50x50px]] [[File:Skull difficulty.png|frameless|50x50px]]
+| style="text-align:left;vertical-align:middle;" |
+{| style="border-collapse:collapse;margin:0;"
+| style="padding:0 .35em .2em 0;text-align:left;vertical-align:top;" | [[File:Portal woodland-ruins.gif|frameless|130x130px]]
+|-
+| style="padding:.15em .35em 0 0;text-align:left;" | [[Mermaid Cove|Woodland Ruins]]
+|}
+|}

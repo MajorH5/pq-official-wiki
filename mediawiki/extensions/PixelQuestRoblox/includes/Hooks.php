@@ -5,6 +5,14 @@ namespace PixelQuestRoblox;
 use MediaWiki\Context\RequestContext;
 use MediaWiki\Installer\DatabaseUpdater;
 use MediaWiki\MediaWikiServices;
+use MediaWiki\Output\OutputPage;
+use MediaWiki\Title\Title;
+use MediaWiki\User\User;
+use PixelQuestRoblox\Service\PqRobloxDataStoreClient;
+use PixelQuestRoblox\Service\PqRobloxFriendService;
+use PixelQuestRoblox\Service\PqRobloxLinkStore;
+use PixelQuestRoblox\Service\PqRobloxLookupIndex;
+use PixelQuestRoblox\Service\PqRobloxUsersApi;
 
 final class Hooks {
 
@@ -132,5 +140,225 @@ final class Hooks {
 			'pqroblox-pref-account-stats-help',
 			'none'
 		);
+	}
+
+	/**
+	 * Auto-inject a protected Pixel Quest profile preview on User: pages.
+	 * Keeps page editable (preview only on view mode).
+	 *
+	 * @param string &$text
+	 */
+	public static function onOutputPageBeforeHTML( OutputPage $out, &$text ): void {
+		$title = $out->getTitle();
+		if ( !$title instanceof Title || $title->getNamespace() !== NS_USER ) {
+			return;
+		}
+		if ( $title->isSubpage() ) {
+			return;
+		}
+		$req = RequestContext::getMain()->getRequest();
+		if ( strtolower( (string)$req->getVal( 'action', 'view' ) ) !== 'view' ) {
+			return;
+		}
+
+		$target = User::newFromName( $title->getText(), false );
+		if ( !$target || !$target->isRegistered() ) {
+			return;
+		}
+
+		$store = new PqRobloxLinkStore();
+		$link = $store->getLinkForWikiUser( $target->getId() );
+		if ( $link === null ) {
+			return;
+		}
+
+		$viewer = $out->getUser();
+		$robloxId = (int)$link['robloxUserId'];
+		$charPage = max( 1, (int)$req->getInt( 'charpage', 1 ) );
+		$gravePage = max( 1, (int)$req->getInt( 'gravepage', 1 ) );
+		$graveSort = (string)$req->getText( 'graveSort', 'time' );
+		if ( !in_array( $graveSort, [ 'time', 'level', 'valor' ], true ) ) {
+			$graveSort = 'time';
+		}
+		$graveDir = strtolower( (string)$req->getText( 'graveDir', 'desc' ) );
+		if ( $graveDir !== 'asc' && $graveDir !== 'desc' ) {
+			$graveDir = 'desc';
+		}
+		$graveMinValorRaw = $req->getText( 'graveMinValor', '' );
+		$graveMinValor = null;
+		if ( is_string( $graveMinValorRaw ) && $graveMinValorRaw !== '' && is_numeric( $graveMinValorRaw ) ) {
+			$graveMinValor = max( 0, (int)floor( (float)$graveMinValorRaw ) );
+		}
+		$vaultPage = max( 1, (int)$req->getInt( 'vaultpage', 1 ) );
+		$vaultHideEmpty = $req->getText( 'vaultHideEmpty', '' ) !== '';
+		$vaultTier = (string)$req->getText( 'vaultTier', '' );
+		if ( $vaultTier !== '' && !in_array( $vaultTier, [ '1', '2', '3', '4', '5', '6', 'legendary' ], true ) ) {
+			$vaultTier = '';
+		}
+		$vaultType = trim( (string)$req->getText( 'vaultType', '' ) );
+		$vaultQ = trim( (string)$req->getText( 'vaultQ', '' ) );
+		$activeTab = trim( (string)$req->getText( 'tab', '' ) );
+		$allowedTabs = [
+			'pq-roblox-panel-characters',
+			'pq-roblox-panel-graveyard',
+			'pq-roblox-panel-skins',
+			'pq-roblox-panel-vault',
+			'pq-roblox-panel-account-stats',
+			'pq-roblox-panel-settings',
+		];
+		if ( $activeTab === '' || !in_array( $activeTab, $allowedTabs, true ) ) {
+			$activeTab = null;
+		}
+
+		$viewerRobloxId = null;
+		if ( $viewer->isRegistered() ) {
+			$vlink = $store->getLinkForWikiUser( $viewer->getId() );
+			if ( $vlink !== null ) {
+				$viewerRobloxId = (int)$vlink['robloxUserId'];
+			}
+		}
+
+		$isOwner = $viewer->isRegistered() && $viewer->getId() === $target->getId();
+		$show = self::resolveProfileVisibility( $viewer, $target, $isOwner, $viewerRobloxId, $robloxId );
+		$robloxPublic = PqRobloxUsersApi::getPublicUser( $robloxId );
+		$playerData = PqRobloxDataStoreClient::getPlayerDataForRobloxUser( $robloxId, false );
+		$lookup = PqRobloxLookupIndex::instance();
+
+		$special = Title::newFromText( 'Special:RobloxProfile/' . str_replace( ' ', '_', $target->getName() ) );
+		$openLabel = htmlspecialchars( $out->getContext()->msg( 'pqroblox-userpage-preview-open' )->text(), ENT_QUOTES );
+		$openHref = $special ? htmlspecialchars( $special->getFullURL(), ENT_QUOTES ) : '#';
+
+		$out->addInlineStyle(
+			'.pqroblox-userpage-preview{border:1px solid #c8ccd1;border-radius:4px;padding:.75rem;margin:1rem 0 0;background:#fff;}'
+			. '.pqroblox-userpage-preview-divider{margin:0 0 .75rem;border:0;border-top:1px solid #c8ccd1;}'
+			. '.pqroblox-userpage-preview p{margin:.2rem 0 .6rem;}'
+		);
+		$out->addInlineScript(
+			"(function(){"
+			. "function place(){"
+			. "var preview=document.querySelector('.pqroblox-userpage-preview');"
+			. "var parser=document.querySelector('.mw-parser-output');"
+			. "if(!preview||!parser){return;}"
+			. "parser.appendChild(preview);"
+			. "}"
+			. "if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',place);}else{place();}"
+			. "})();"
+		);
+		$out->addHTML(
+			'<section class="pqroblox-userpage-preview">'
+			. '<hr class="pqroblox-userpage-preview-divider" />'
+			. '<p><a href="' . $openHref . '">' . $openLabel . '</a></p>'
+		);
+		RobloxProfileRenderer::render(
+			$out,
+			$out->getContext(),
+			$viewer,
+			$target,
+			$robloxId,
+			$playerData,
+			$lookup,
+			$show,
+			$charPage,
+			$gravePage,
+			$graveSort,
+			$graveDir,
+			$graveMinValor,
+			$vaultPage,
+			$vaultHideEmpty,
+			$vaultTier,
+			$vaultType,
+			$vaultQ,
+			$activeTab,
+			$robloxPublic
+		);
+		$out->addHTML( '</section>' );
+	}
+
+	/**
+	 * Shared visibility resolver used by Special:RobloxProfile and User: page embeds.
+	 *
+	 * @return array<string, bool>
+	 */
+	private static function resolveProfileVisibility(
+		User $viewer,
+		User $target,
+		bool $isOwner,
+		?int $viewerRobloxId,
+		int $targetRobloxId
+	): array {
+		if ( $isOwner ) {
+			return [
+				'valor' => true,
+				'last_seen' => true,
+				'characters' => true,
+				'characters_detail' => true,
+				'characters_inventory' => true,
+				'graveyard' => true,
+				'skins' => true,
+				'vault' => true,
+				'account_stats' => true,
+			];
+		}
+
+		$userOptionsLookup = MediaWikiServices::getInstance()->getUserOptionsLookup();
+		$getState = static function ( string $key ) use ( $target, $userOptionsLookup ): string {
+			return (string)$userOptionsLookup->getOption( $target, $key, '0' );
+		};
+
+		$stateValor = $getState( 'pqroblox-pub-valor' );
+		$stateLastSeen = $getState( 'pqroblox-pub-last-seen' );
+		$stateChars = $getState( 'pqroblox-pub-characters' );
+		$stateCharsDetail = $getState( 'pqroblox-pub-characters-detail' );
+		$stateCharsInv = $getState( 'pqroblox-pub-characters-inventory' );
+		$stateGrave = $getState( 'pqroblox-pub-graveyard' );
+		$stateSkins = $getState( 'pqroblox-pub-skins' );
+		$stateVault = $getState( 'pqroblox-pub-vault' );
+		$stateAccountStats = $getState( 'pqroblox-pub-account-stats' );
+
+		$needFriend =
+			$stateValor === 'friends'
+			|| $stateLastSeen === 'friends'
+			|| $stateChars === 'friends'
+			|| $stateCharsDetail === 'friends'
+			|| $stateCharsInv === 'friends'
+			|| $stateGrave === 'friends'
+			|| $stateSkins === 'friends'
+			|| $stateVault === 'friends'
+			|| $stateAccountStats === 'friends';
+
+		$friendOk = false;
+		if ( $needFriend && $viewerRobloxId !== null && $viewerRobloxId > 0 ) {
+			$friendOk = PqRobloxFriendService::areRobloxUsersFriends( $viewerRobloxId, $targetRobloxId );
+		}
+		$guildOk = false;
+
+		$stateToVisible = static function ( string $state ) use ( $friendOk, $guildOk ): bool {
+			if ( $state === '1' || $state === 'everyone' ) {
+				return true;
+			}
+			if ( $state === '0' || $state === '' || $state === 'none' ) {
+				return false;
+			}
+			if ( $state === 'friends' ) {
+				return $friendOk;
+			}
+			if ( $state === 'guildmates' ) {
+				return $guildOk;
+			}
+			return false;
+		};
+
+		$chars = $stateToVisible( $stateChars );
+		return [
+			'valor' => $stateToVisible( $stateValor ),
+			'last_seen' => $stateToVisible( $stateLastSeen ),
+			'characters' => $chars,
+			'characters_detail' => $chars && $stateToVisible( $stateCharsDetail ),
+			'characters_inventory' => $chars && $stateToVisible( $stateCharsInv ),
+			'graveyard' => $stateToVisible( $stateGrave ),
+			'skins' => $stateToVisible( $stateSkins ),
+			'vault' => $stateToVisible( $stateVault ),
+			'account_stats' => $stateToVisible( $stateAccountStats ),
+		];
 	}
 }

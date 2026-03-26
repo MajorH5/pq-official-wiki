@@ -15,7 +15,8 @@
 	"Hooks": {
 		"LoadExtensionSchemaUpdates": "PixelQuestRoblox\\Hooks::onLoadExtensionSchemaUpdates",
 		"GetPreferences": "PixelQuestRoblox\\Hooks::onGetPreferences",
-		"UserGetDefaultOptions": "PixelQuestRoblox\\Hooks::onUserGetDefaultOptions"
+		"UserGetDefaultOptions": "PixelQuestRoblox\\Hooks::onUserGetDefaultOptions",
+		"OutputPageBeforeHTML": "PixelQuestRoblox\\Hooks::onOutputPageBeforeHTML"
 	},
 	"SpecialPages": {
 		"LinkRobloxAccount": "PixelQuestRoblox\\SpecialLinkRobloxAccount",

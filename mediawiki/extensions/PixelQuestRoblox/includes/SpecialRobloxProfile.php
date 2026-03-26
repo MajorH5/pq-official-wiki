@@ -20,8 +20,16 @@ final class SpecialRobloxProfile extends SpecialPage {
 	public function execute( $subPage ): void {
 		$this->setHeaders();
 		$out = $this->getOutput();
+		$out->setPageTitle( $this->msg( 'robloxprofile' )->text() );
+		// Allow same-origin embedding for User: page profile preview iframe.
+		$out->setPreventClickjacking( false );
 		$viewer = $this->getUser();
 		$req = $this->getRequest();
+		$isEmbed = $req->getBool( 'embed' ) || strtolower( (string)$req->getVal( 'action', '' ) ) === 'render';
+		if ( $isEmbed ) {
+			// Render only the special-page content (no skin chrome/sidebar/toolboxes).
+			$out->setArticleBodyOnly( true );
+		}
 		$charPage = max( 1, (int)$req->getInt( 'charpage', 1 ) );
 		$gravePage = max( 1, (int)$req->getInt( 'gravepage', 1 ) );
 		$graveSort = (string)$req->getText( 'graveSort', 'time' );
