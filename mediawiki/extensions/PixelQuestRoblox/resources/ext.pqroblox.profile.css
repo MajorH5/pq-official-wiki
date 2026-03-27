@@ -250,6 +250,19 @@
 	image-rendering: crisp-edges;
 }
 
+.pq-roblox-honor-with-ico {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35em;
+}
+
+.pq-roblox-honor-ico-img {
+	flex-shrink: 0;
+	image-rendering: pixelated;
+	image-rendering: -moz-crisp-edges;
+	image-rendering: crisp-edges;
+}
+
 .pq-roblox-eq-cell {
 	display: flex;
 	justify-content: center;

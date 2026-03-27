@@ -2,6 +2,7 @@
 
 namespace PixelQuestRoblox;
 
+use MediaWiki\Html\Html;
 use MediaWiki\MediaWikiServices;
 use MediaWiki\SpecialPage\SpecialPage;
 use MediaWiki\Title\Title;
@@ -116,12 +117,8 @@ final class SpecialPQProfile extends SpecialPage {
 				if ( $row !== null ) {
 					$robloxId = (int)$row['robloxUserId'];
 				} else {
-					$resolved = PqRobloxUsersApi::getUserIdFromUsername( $name );
-					if ( $resolved === null || $resolved <= 0 ) {
-						$out->addWikiMsg( 'pqroblox-profile-not-found-roblox' );
-						return;
-					}
-					$robloxId = $resolved;
+					$out->addWikiMsg( 'pqroblox-profile-not-found-roblox' );
+					return;
 				}
 			}
 		}
@@ -141,27 +138,34 @@ final class SpecialPQProfile extends SpecialPage {
 			}
 		}
 
-		$robloxPublic = PqRobloxUsersApi::getPublicUser( $robloxId );
-		if ( $robloxPublic !== null && $robloxPublic['name'] !== '' ) {
-			$out->setPageTitle(
-				$this->msg( 'pqroblox-special-profile-pagetitle', $robloxPublic['name'] )->text()
-			);
-		} else {
-			$out->setPageTitle( $this->msg( 'special-pqprofile' )->text() );
-		}
-
 		$isProfileOwner = self::computeProfileOwner( $viewer, $target, $viewerRobloxId, $robloxId );
 		$forceRefresh = $req->getBool( 'pqroblox_refresh' )
 			&& ( $isProfileOwner || $viewer->isAllowed( 'userrights' ) );
 
 		$playerData = PqRobloxDataStoreClient::getPlayerDataForRobloxUser( $robloxId, $forceRefresh );
-		if ( $playerData !== null ) {
-			$indexName = null;
-			if ( $robloxPublic !== null && isset( $robloxPublic['name'] ) && $robloxPublic['name'] !== '' ) {
-				$indexName = $robloxPublic['name'];
-			}
-			$indexStore->upsert( $robloxId, $indexName );
+		if ( $playerData === null ) {
+			$out->setPageTitle( $this->msg( 'special-pqprofile' )->text() );
+			$out->addHTML( Html::rawElement( 'div', [ 'class' => 'warningbox' ],
+				$this->msg( 'pqroblox-profile-not-found-save' )->escaped() ) );
+			return;
 		}
+
+		$robloxPublic = PqRobloxUsersApi::getPublicUser( $robloxId );
+		if ( $robloxPublic !== null && $robloxPublic['name'] !== '' ) {
+			$out->setPageTitle( $this->msg( 'pqroblox-special-profile-pagetitle', $robloxPublic['name'] )->text() );
+		} elseif ( $linkedWikiId !== null && $target->isRegistered() ) {
+			$out->setPageTitle( $this->msg( 'pqroblox-special-profile-pagetitle', $target->getName() )->text() );
+		} else {
+			$out->setPageTitle( $this->msg( 'special-pqprofile' )->text() );
+		}
+
+		$indexName = null;
+		if ( $robloxPublic !== null && isset( $robloxPublic['name'] ) && $robloxPublic['name'] !== '' ) {
+			$indexName = $robloxPublic['name'];
+		} elseif ( $linkedWikiId !== null && $target->isRegistered() ) {
+			$indexName = $target->getName();
+		}
+		$indexStore->upsert( $robloxId, $indexName );
 		$show = self::resolveVisibility( $viewer, $target, $isProfileOwner, $viewerRobloxId, $robloxId );
 		$lookup = PqRobloxLookupIndex::instance();
 
@@ -236,7 +240,7 @@ final class SpecialPQProfile extends SpecialPage {
 				'characters_inventory' => false,
 				'graveyard' => true,
 				'skins' => false,
-				'badges' => $viewer->isRegistered(),
+				'badges' => false,
 				'honor' => true,
 				'vault' => false,
 				'account_stats' => false,

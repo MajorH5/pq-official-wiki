@@ -289,7 +289,6 @@ final class Hooks {
 
 		$isOwner = $viewer->isRegistered() && $viewer->getId() === $target->getId();
 		$show = self::resolveProfileVisibility( $viewer, $target, $isOwner, $viewerRobloxId, $robloxId );
-		$robloxPublic = PqRobloxUsersApi::getPublicUser( $robloxId );
 		$playerData = PqRobloxDataStoreClient::getPlayerDataForRobloxUser( $robloxId, false );
 		$lookup = PqRobloxLookupIndex::instance();
 

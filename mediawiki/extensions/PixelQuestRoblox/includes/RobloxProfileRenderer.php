@@ -91,7 +91,7 @@ final class RobloxProfileRenderer {
 
 	/**
 	 * @param array<string, bool> $show
-	 * @param array{name: string, displayName: string}|null $robloxPublic from users.roblox.com (cached)
+	 * @param array{name: string, displayName: string}|null $robloxPublic From users.roblox.com when save data exists (Special:PQProfile / User embed).
 	 * @param bool|null $profileOwnerHint When set, overrides wiki-only owner detection (Roblox-linked viewers).
 	 */
 	public static function render(
@@ -124,13 +124,14 @@ final class RobloxProfileRenderer {
 		} else {
 			$isOwner = $viewer->isRegistered() && $viewer->getId() === $target->getId();
 		}
-		$out->addHTML( self::htmlProfileLead( $ctx, $robloxUserId, $robloxPublic, $lookup, $playerData, $show, $isOwner, $viewer ) );
 
 		if ( $playerData === null ) {
 			$out->addHTML( Html::rawElement( 'div', [ 'class' => 'warningbox' ],
-				$ctx->msg( 'pqroblox-profile-nodata' )->escaped() ) );
+				$ctx->msg( 'pqroblox-profile-not-found-save' )->escaped() ) );
 			return;
 		}
+
+		$out->addHTML( self::htmlProfileLead( $ctx, $target, $robloxUserId, $robloxPublic, $lookup, $playerData, $show, $isOwner, $viewer ) );
 
 		$accLvl = PqRobloxPlayerDataParser::getAccountLevel( $playerData );
 		if ( $accLvl !== null ) {
@@ -221,7 +222,7 @@ final class RobloxProfileRenderer {
 					'html' => self::htmlSettingsPanel( $ctx ),
 				],
 			];
-			if ( self::includeBadgesTab( $lookup, $show, $isOwner, $viewer ) ) {
+			if ( self::includeBadgesTab( $lookup ) ) {
 				array_splice( $panels, 3, 0, [
 					[
 						'id' => 'pq-roblox-panel-badges',
@@ -282,7 +283,7 @@ final class RobloxProfileRenderer {
 						: $hiddenHtml,
 				],
 			];
-			if ( self::includeBadgesTab( $lookup, $show, $isOwner, $viewer ) ) {
+			if ( self::includeBadgesTab( $lookup ) ) {
 				$badgeHtml = !empty( $show['badges'] )
 					? self::htmlBadgeGrid( $ctx, $lookup, $playerData )
 					: $hiddenHtml;
@@ -310,21 +311,10 @@ final class RobloxProfileRenderer {
 	}
 
 	/**
-	 * Badges tab: datadump must list badges; logged-out viewers never see the tab; visibility follows prefs for others.
+	 * Badges tab when pq-datadump lists badges. Tab is always shown; content uses $show['badges'] (Hidden vs grid).
 	 */
-	private static function includeBadgesTab(
-		PqRobloxLookupIndex $lookup,
-		array $show,
-		bool $isOwner,
-		User $viewer
-	): bool {
-		if ( $lookup->getAllBadgeIdsOrdered() === [] ) {
-			return false;
-		}
-		if ( !$viewer->isRegistered() && !$isOwner ) {
-			return false;
-		}
-		return $isOwner || !empty( $show['badges'] );
+	private static function includeBadgesTab( PqRobloxLookupIndex $lookup ): bool {
+		return $lookup->getAllBadgeIdsOrdered() !== [];
 	}
 
 	/**
@@ -342,11 +332,14 @@ final class RobloxProfileRenderer {
 	}
 
 	/**
+	 * Prefer Roblox username + display name from public API when provided; else linked wiki name; else link only.
+	 *
 	 * @param array{name: string, displayName: string}|null $robloxPublic
 	 * @param array<string, bool>|null $show
 	 */
 	private static function htmlProfileLead(
 		IContextSource $ctx,
+		User $target,
 		int $robloxUserId,
 		?array $robloxPublic,
 		?PqRobloxLookupIndex $lookup = null,
@@ -379,6 +372,11 @@ final class RobloxProfileRenderer {
 			if ( $dn !== '' && $dn !== $n ) {
 				$inner .= ' ' . Html::element( 'span', [ 'class' => 'pq-roblox-muted' ], '(' . $dn . ')' );
 			}
+			$inner .= ' · ' . $tailBlock;
+			return Html::rawElement( 'p', [ 'class' => 'pq-roblox-profile-lead' ], $inner );
+		}
+		if ( $target->isRegistered() ) {
+			$inner = Html::element( 'strong', [], $target->getName() );
 			$inner .= ' · ' . $tailBlock;
 			return Html::rawElement( 'p', [ 'class' => 'pq-roblox-profile-lead' ], $inner );
 		}
