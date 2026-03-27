@@ -93,10 +93,25 @@
       190,
       418,
       285,
-      361
-
+      361,
+      547
     ],
-    "skins": []
+    "badges": [],
+    "achievements": [],
+    "skins": [
+      21,
+      24,
+      23,
+      22,
+      56,
+      57,
+      58,
+      67,
+      68,
+      91,
+      61,
+      151
+    ]
   },
   "unreleased": {
     "items": [],
@@ -104,6 +119,9 @@
     "entities": [
 
     ],
-    "skins": []
-  }
+    "skins": [],
+    "badges": [],
+    "achievements": []
+  },
+  "show_hidden_achievements": []
 }

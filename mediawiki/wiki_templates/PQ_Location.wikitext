@@ -5,6 +5,8 @@ Section headings for Found entities / Dropped from are included in the bot outpu
 </noinclude>
 {{{portal_image|}}}
 
+{{{ost_embed|}}}
+
 {{{portal_table|}}}
 
 {{#if:{{{difficulty|}}}|'''Difficulty''' {{{difficulty|}}}

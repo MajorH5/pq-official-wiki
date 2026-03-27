@@ -84,6 +84,18 @@ final class PqRobloxTextureNames {
 		return 'valor_icon';
 	}
 
+	public static function badgeSpriteBase( int $badgeId, string $name ): string {
+		return self::sanitizeBase( 'badge_' . self::slug( $name ) . '_' . $badgeId );
+	}
+
+	public static function honorIconBase( string $displayName ): string {
+		return self::sanitizeBase( 'honor_' . self::slug( $displayName ) );
+	}
+
+	public static function achievementIconBase( string $categoryLabel, int $sequenceNumber ): string {
+		return self::sanitizeBase( 'achievement_' . self::slug( $categoryLabel ) . '_' . $sequenceNumber );
+	}
+
 	public static function difficultySkullBase(): string {
 		return 'skull_difficulty';
 	}

@@ -36,7 +36,7 @@ final class SpecialRobloxProfiles extends SpecialPage {
 		foreach ( $res as $row ) {
 			$name = (string)$row->user_name;
 			$rid = (int)$row->prl_roblox_user_id;
-			$t = Title::newFromText( 'RobloxProfile/' . str_replace( ' ', '_', $name ), \NS_SPECIAL );
+			$t = Title::makeTitle( \NS_SPECIAL, 'PQProfile/' . (int)$rid );
 			$link = Html::element( 'a', [ 'href' => $t->getFullURL() ], $name );
 			$rows .= Html::rawElement( 'tr', [],
 				Html::element( 'td', [], $link )

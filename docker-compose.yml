@@ -24,6 +24,9 @@ services:
       - images:/var/www/html/images
       - ./uploads.ini:/usr/local/etc/php/conf.d/uploads.ini
       - ./LocalSettings.php:/var/www/html/LocalSettings.php
+      - ./LocalSettings.pixelquest-snippet.php:/var/www/html/LocalSettings.pixelquest-snippet.php:ro
+      # Dev: always use repo extension (avoids stale/broken image COPY). Remove for image-only deploys.
+      - ./mediawiki/extensions/PixelQuestRoblox:/var/www/html/extensions/PixelQuestRoblox:ro
       # Optional: pq-datadump.json for Roblox profile item/skin lookups (set PQ_DATADUMP_PATH=/var/www/html/pq-datadump.json)
       - ./pq-datadump.json:/var/www/html/pq-datadump.json:ro
 

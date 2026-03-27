@@ -4,6 +4,7 @@ namespace PixelQuestRoblox;
 
 use HTMLForm;
 use MediaWiki\Html\Html;
+use MediaWiki\MediaWikiServices;
 use MediaWiki\SpecialPage\SpecialPage;
 use MediaWiki\Status\Status;
 use MediaWiki\User\User;
@@ -78,11 +79,23 @@ final class SpecialLinkRobloxAccount extends SpecialPage {
 			],
 		];
 
+		$siteKey = PqRobloxConfig::getRecaptchaSiteKey();
+		if ( $siteKey !== '' ) {
+			$out->addScript( '<script src="https://www.google.com/recaptcha/api.js" async defer></script>' );
+		}
+
 		$htmlForm = HTMLForm::factory( 'ooui', $formDescriptor, $this->getContext(), 'pqrobloxlink' );
 		$htmlForm
 			->setSubmitTextMsg( 'pqroblox-form-submit' )
 			->setSubmitCallback( [ $this, 'onSubmitLink' ] )
-			->setWrapperLegendMsg( 'pqroblox-form-legend' )
+			->setWrapperLegendMsg( 'pqroblox-form-legend' );
+		if ( $siteKey !== '' ) {
+			// After the code field, before the submit button (OOUI: footer slot above actions).
+			$htmlForm->addFooterHtml(
+				'<div class="g-recaptcha" data-sitekey="' . htmlspecialchars( $siteKey, ENT_QUOTES ) . '"></div>'
+			);
+		}
+		$htmlForm
 			->prepareForm()
 			->show();
 		$out->addHTML( $this->getPlaceholderGuideHtml() );
@@ -117,6 +130,13 @@ final class SpecialLinkRobloxAccount extends SpecialPage {
 	 * @return bool|Status
 	 */
 	public function onSubmitLink( $data ) {
+		$secret = PqRobloxConfig::getRecaptchaSecretKey();
+		if ( $secret !== '' ) {
+			$token = (string)$this->getRequest()->getVal( 'g-recaptcha-response', '' );
+			if ( !$this->verifyRecaptchaResponse( $token ) ) {
+				return Status::newFatal( 'pqroblox-recaptcha-failed' );
+			}
+		}
 		$store = new PqRobloxLinkStore();
 		$user = $this->getUser();
 		try {
@@ -194,6 +214,35 @@ final class SpecialLinkRobloxAccount extends SpecialPage {
 			] )
 			. Html::rawElement( 'div', [ 'class' => 'mw-htmlform-submit-buttons' ], $button )
 		);
+	}
+
+	private function verifyRecaptchaResponse( string $token ): bool {
+		$secret = PqRobloxConfig::getRecaptchaSecretKey();
+		if ( $secret === '' ) {
+			return true;
+		}
+		if ( $token === '' ) {
+			return false;
+		}
+		$req = MediaWikiServices::getInstance()->getHttpRequestFactory()->create(
+			'https://www.google.com/recaptcha/api/siteverify',
+			[
+				'method' => 'POST',
+				'postData' => http_build_query( [
+					'secret' => $secret,
+					'response' => $token,
+				] ),
+				'timeout' => 8,
+			],
+			__METHOD__
+		);
+		$req->setHeader( 'Content-Type', 'application/x-www-form-urlencoded' );
+		$status = $req->execute();
+		if ( !$status->isOK() || (int)$req->getStatus() !== 200 ) {
+			return false;
+		}
+		$json = json_decode( $req->getContent(), true );
+		return is_array( $json ) && !empty( $json['success'] );
 	}
 
 	private function getPlaceholderGuideHtml(): string {

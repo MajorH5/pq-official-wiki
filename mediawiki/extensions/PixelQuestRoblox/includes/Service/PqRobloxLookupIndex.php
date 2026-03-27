@@ -64,6 +64,35 @@ final class PqRobloxLookupIndex {
 	/** Asset id for LOOT_CONTAINERS_8X8_RENDERED (loot_tier_icons.py). */
 	private ?string $lootTextureAssetId = null;
 
+	/** @var array<int, array<string, mixed>> */
+	private $badgesById = [];
+
+	/** @var array<int, array<string, mixed>> */
+	private $achievementsById = [];
+
+	/** @var array<int, string> */
+	private $badgeTitleById = [];
+
+	/** @var array<int, string> */
+	private $achievementTitleById = [];
+
+	/** @var array<int, string> ordered badge ids for grid */
+	private $allBadgeIdsOrdered = [];
+
+	/** Denominator for honor → %: (honor / this) * 100 — see MaxAttainableHonorPoints / MaxPossibleHonor in datadump. */
+	private float $maxAttainableHonorPoints = 0.0;
+
+	/** @var array<string, string> HonorToName */
+	private $honorToName = [];
+
+	/**
+	 * @var array<int, array{min: float, max: float}>
+	 */
+	private $honorRangesByRank = [];
+
+	/** @var int[] */
+	private $honorRankOrder = [];
+
 	private function __construct() {
 		$path = PqRobloxConfig::getDataDumpPath();
 		if ( !is_readable( $path ) ) {
@@ -85,7 +114,7 @@ final class PqRobloxLookupIndex {
 					continue;
 				}
 				$id = (int)( $row['Id'] ?? 0 );
-				if ( $id > 0 ) {
+				if ( $id >= 0 ) {
 					$this->itemsById[$id] = $row;
 				}
 			}
@@ -99,7 +128,7 @@ final class PqRobloxLookupIndex {
 					continue;
 				}
 				$id = (int)( $row['Id'] ?? 0 );
-				if ( $id > 0 ) {
+				if ( $id >= 0 ) {
 					$this->skinsById[$id] = $row;
 				}
 			}
@@ -115,7 +144,7 @@ final class PqRobloxLookupIndex {
 					continue;
 				}
 				$id = (int)( $row['Id'] ?? 0 );
-				if ( $id > 0 ) {
+				if ( $id >= 0 ) {
 					$this->entitiesById[$id] = $row;
 				}
 			}
@@ -129,11 +158,87 @@ final class PqRobloxLookupIndex {
 					continue;
 				}
 				$id = (int)( $row['Id'] ?? 0 );
-				if ( $id > 0 ) {
+				if ( $id >= 0 ) {
 					$this->accountStatsById[$id] = $row;
 				}
 			}
 			$this->accountStatTitleById = self::buildTitles( $this->accountStatsById, 'Account Stat' );
+		}
+
+		$badges = $data['Badges'] ?? [];
+		if ( is_array( $badges ) ) {
+			foreach ( $badges as $row ) {
+				if ( !is_array( $row ) ) {
+					continue;
+				}
+				$id = (int)( $row['Id'] ?? 0 );
+				if ( $id >= 0 ) {
+					$this->badgesById[$id] = $row;
+				}
+			}
+			$this->badgeTitleById = self::buildTitles( $this->badgesById, 'Badge' );
+			$this->allBadgeIdsOrdered = array_keys( $this->badgesById );
+			sort( $this->allBadgeIdsOrdered, SORT_NUMERIC );
+		}
+
+		$achievements = $data['Achievements'] ?? [];
+		if ( is_array( $achievements ) ) {
+			foreach ( $achievements as $row ) {
+				if ( !is_array( $row ) ) {
+					continue;
+				}
+				$id = (int)( $row['Id'] ?? 0 );
+				if ( $id >= 0 ) {
+					$this->achievementsById[$id] = $row;
+				}
+			}
+			$this->achievementTitleById = self::buildTitles( $this->achievementsById, 'Achievement' );
+		}
+
+		$maxHonorRaw = $data['MaxAttainableHonorPoints'] ?? $data['maxAttainableHonorPoints'] ?? null;
+		if ( $maxHonorRaw === null && is_array( $data['Achievement'] ?? null ) ) {
+			$ach = $data['Achievement'];
+			$maxHonorRaw = $ach['MaxAttainableHonorPoints'] ?? $ach['maxAttainableHonorPoints'] ?? null;
+		}
+		if ( $maxHonorRaw === null ) {
+			$maxHonorRaw = $data['MaxPossibleHonor'] ?? $data['maxPossibleHonor'] ?? 0;
+		}
+		$this->maxAttainableHonorPoints = (float)$maxHonorRaw;
+
+		$htn = $data['HonorToName'] ?? [];
+		if ( is_array( $htn ) ) {
+			foreach ( $htn as $k => $v ) {
+				if ( is_string( $v ) ) {
+					$this->honorToName[(string)$k] = $v;
+				}
+			}
+		}
+
+		$hr = $data['HonorRanges'] ?? [];
+		if ( is_array( $hr ) ) {
+			foreach ( $hr as $k => $spec ) {
+				if ( !is_array( $spec ) ) {
+					continue;
+				}
+				if ( !is_numeric( $k ) ) {
+					continue;
+				}
+				$rid = (int)$k;
+				$this->honorRangesByRank[$rid] = [
+					'min' => (float)( $spec['min'] ?? $spec['Min'] ?? 0 ),
+					'max' => (float)( $spec['max'] ?? $spec['Max'] ?? 100 ),
+				];
+			}
+			$this->honorRankOrder = array_keys( $this->honorRangesByRank );
+			$ranges = $this->honorRangesByRank;
+			usort(
+				$this->honorRankOrder,
+				static function ( int $a, int $b ) use ( $ranges ) {
+					$ha = $ranges[$a] ?? [ 'min' => 0.0 ];
+					$hb = $ranges[$b] ?? [ 'min' => 0.0 ];
+					return $ha['min'] <=> $hb['min'];
+				}
+			);
 		}
 
 		$textures = $data['Textures'] ?? null;
@@ -222,6 +327,14 @@ final class PqRobloxLookupIndex {
 		return $this->skinTitleById[$id] ?? ( 'Skin ' . $id );
 	}
 
+	public function getBadgePageTitle( int $id ): string {
+		return $this->badgeTitleById[$id] ?? ( 'Badge ' . $id );
+	}
+
+	public function getAchievementPageTitle( int $id ): string {
+		return $this->achievementTitleById[$id] ?? ( 'Achievement ' . $id );
+	}
+
 	public function getEntityPageTitle( int $id ): string {
 		return $this->entityTitleById[$id] ?? ( 'Entity ' . $id );
 	}
@@ -236,6 +349,80 @@ final class PqRobloxLookupIndex {
 
 	public function getSkinRow( int $id ): ?array {
 		return $this->skinsById[$id] ?? null;
+	}
+
+	/**
+	 * @return array<string, mixed>|null
+	 */
+	public function getBadgeRow( int $id ): ?array {
+		return $this->badgesById[$id] ?? null;
+	}
+
+	/**
+	 * @return array<string, mixed>|null
+	 */
+	public function getAchievementRow( int $id ): ?array {
+		return $this->achievementsById[$id] ?? null;
+	}
+
+	public function getMaxPossibleHonor(): float {
+		return $this->maxAttainableHonorPoints;
+	}
+
+	/** Same as game: Achievement.MaxAttainableHonorPoints (falls back to root MaxPossibleHonor). */
+	public function getMaxAttainableHonorPoints(): float {
+		return $this->maxAttainableHonorPoints;
+	}
+
+	/**
+	 * Match game honor tier: normalized = (honor / MaxAttainableHonorPoints) * 100, then find HonorRanges
+	 * rank where Min <= normalized <= Max (inclusive). Iteration order is ascending Min so shared
+	 * boundaries (e.g. 5 in [0,5] and [5,10]) resolve to the lower rank first. Default: bronze (0).
+	 *
+	 * @param float $normalizedPercent Same as Lua `normalized` (0–100 scale).
+	 */
+	public function rankIdFromHonorPercent( float $normalizedPercent ): int {
+		if ( $this->honorRangesByRank === [] ) {
+			return 0;
+		}
+		foreach ( $this->honorRankOrder as $rid ) {
+			$r = $this->honorRangesByRank[$rid] ?? null;
+			if ( !is_array( $r ) ) {
+				continue;
+			}
+			$min = (float)( $r['min'] ?? 0 );
+			$max = (float)( $r['max'] ?? 100 );
+			if ( $normalizedPercent >= $min && $normalizedPercent <= $max ) {
+				return $rid;
+			}
+		}
+		return 0;
+	}
+
+	public function getHonorDisplayNameForRankId( int $rankId ): string {
+		$k = (string)$rankId;
+		return $this->honorToName[$k] ?? ( 'Honor ' . $rankId );
+	}
+
+	/** @return int[] */
+	public function getAllBadgeIdsOrdered(): array {
+		return $this->allBadgeIdsOrdered;
+	}
+
+	/**
+	 * Wiki file for uploaded badge sprite (bot: badge_{slug}_{id}.png).
+	 */
+	public function getBadgeWikiIconUrl( int $id ): ?string {
+		if ( $id <= 0 ) {
+			return null;
+		}
+		$row = $this->badgesById[$id] ?? null;
+		if ( !$row ) {
+			return null;
+		}
+		$n = is_string( $row['Name'] ?? null ) ? $row['Name'] : ( 'Badge ' . $id );
+		$base = PqRobloxTextureNames::badgeSpriteBase( $id, $n );
+		return PqRobloxWikiFileUrl::forFilename( $base . '.png' );
 	}
 
 	public function getAccountStatRow( int $id ): ?array {

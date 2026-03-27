@@ -87,3 +87,19 @@ def account_stat_page_path(stat: dict, used_paths: set[str] | None = None) -> st
     if used_paths is None:
         return _clean_title(stat.get("Name"), fb)
     return _claim_unique_title(stat.get("Name"), fb, sid, used_paths)
+
+
+def badge_page_path(badge: dict, used_paths: set[str] | None = None) -> str:
+    bid = int(badge["Id"])
+    fb = f"Badge {bid}"
+    if used_paths is None:
+        return _clean_title(badge.get("Name"), fb)
+    return _claim_unique_title(badge.get("Name"), fb, bid, used_paths)
+
+
+def achievement_page_path(ach: dict, used_paths: set[str] | None = None) -> str:
+    aid = int(ach["Id"])
+    fb = f"Achievement {aid}"
+    if used_paths is None:
+        return _clean_title(ach.get("Name"), fb)
+    return _claim_unique_title(ach.get("Name"), fb, aid, used_paths)

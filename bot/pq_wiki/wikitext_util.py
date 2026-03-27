@@ -34,14 +34,26 @@ def page_title_slug(name: Optional[str], fallback: str) -> str:
     return title_case_slug(slugify(name, fallback=fallback))
 
 
+def _font_opening_tag_to_span(open_tag: str) -> str:
+    """Map <font color=...> to <span style="color:...">; strip other <font> opens."""
+    cm = re.search(r"\bcolor\s*=\s*(['\"]?)([^'\" >]+)\1", open_tag, re.I)
+    if cm:
+        return f'<span style="color:{cm.group(2)}">'
+    return ""
+
+
 def html_to_wikitext(s: Optional[str]) -> str:
     if not s:
         return ""
     t = s
+    # <font color="..."> (game item/skill descriptions) → span; MediaWiki keeps inline span in wikitext
+    t = re.sub(r"<font\b[^>]*>", lambda m: _font_opening_tag_to_span(m.group(0)), t, flags=re.I)
+    t = re.sub(r"<\s*/\s*font\s*>", "</span>", t, flags=re.I)
     t = re.sub(r"<b>(.*?)</b>", r"'''\1'''", t, flags=re.I | re.DOTALL)
     t = re.sub(r"<i>(.*?)</i>", r"''\1''", t, flags=re.I | re.DOTALL)
     t = re.sub(r"<br\s*/?>", "\n", t, flags=re.I)
-    t = re.sub(r"<[^>]+>", "", t)
+    # Drop unsupported tags; keep <span style="color:...">…</span> so colors survive import
+    t = re.sub(r"<(?![/]?span\b)[^>]+>", "", t, flags=re.I)
     return t.strip()
 
 

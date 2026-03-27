@@ -7,7 +7,7 @@
 	"type": "extension",
 	"manifest_version": 2,
 	"requires": {
-		"MediaWiki": ">= 1.42.0"
+		"MediaWiki": ">= 1.39.0"
 	},
 	"AutoloadNamespaces": {
 		"PixelQuestRoblox\\": "includes/"
@@ -16,15 +16,18 @@
 		"LoadExtensionSchemaUpdates": "PixelQuestRoblox\\Hooks::onLoadExtensionSchemaUpdates",
 		"GetPreferences": "PixelQuestRoblox\\Hooks::onGetPreferences",
 		"UserGetDefaultOptions": "PixelQuestRoblox\\Hooks::onUserGetDefaultOptions",
-		"OutputPageBeforeHTML": "PixelQuestRoblox\\Hooks::onOutputPageBeforeHTML"
+		"OutputPageBeforeHTML": "PixelQuestRoblox\\Hooks::onOutputPageBeforeHTML",
+		"ApiOpenSearchSuggest": "PixelQuestRoblox\\Hooks::onApiOpenSearchSuggest"
 	},
 	"SpecialPages": {
 		"LinkRobloxAccount": "PixelQuestRoblox\\SpecialLinkRobloxAccount",
-		"RobloxProfile": "PixelQuestRoblox\\SpecialRobloxProfile",
+		"PQProfile": "PixelQuestRoblox\\SpecialPQProfile",
+		"RobloxProfile": "PixelQuestRoblox\\SpecialRobloxProfileRedirect",
 		"RobloxProfiles": "PixelQuestRoblox\\SpecialRobloxProfiles"
 	},
 	"APIModules": {
-		"pqrobloxrequestcode": "PixelQuestRoblox\\Api\\ApiPqRobloxRequestCode"
+		"pqrobloxrequestcode": "PixelQuestRoblox\\Api\\ApiPqRobloxRequestCode",
+		"pqrobloxindexplayer": "PixelQuestRoblox\\Api\\ApiPqRobloxIndexPlayer"
 	},
 	"MessagesDirs": {
 		"PixelQuestRoblox": [

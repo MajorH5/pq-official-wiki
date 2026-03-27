@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import pywikibot
 
@@ -36,6 +36,17 @@ def wiki_filename_for_semantic(base: str, ext: str) -> str:
     return f"{sanitize_filename_base(base)}.{ext.lower()}"
 
 
+def _filename_from_map_entry(value: Any) -> Optional[str]:
+    """wiki_image_map.json may store a bare filename or {filename, sha256, ...}."""
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    if isinstance(value, dict):
+        fn = value.get("filename") or value.get("name")
+        if isinstance(fn, str) and fn.strip():
+            return fn.strip()
+    return None
+
+
 def ensure_file_uploaded(
     site: pywikibot.Site,
     semantic_base: str,
@@ -51,10 +62,11 @@ def ensure_file_uploaded(
     map_key = f"{semantic_base}|{ext.lower()}"
     m = _load_map()
     if map_key in m:
-        existing = m[map_key]
-        fp = pywikibot.FilePage(site, f"File:{existing}")
-        if fp.exists():
-            return existing
+        existing = _filename_from_map_entry(m[map_key])
+        if existing:
+            fp = pywikibot.FilePage(site, f"File:{existing}")
+            if fp.exists():
+                return existing
 
     fp = pywikibot.FilePage(site, f"File:{fname}")
     if fp.exists():

@@ -73,4 +73,64 @@ final class PqRobloxUsersApi {
 			'displayName' => is_string( $dn ) ? $dn : '',
 		];
 	}
+
+	/**
+	 * Resolve current Roblox username to user id (POST /v1/usernames/users).
+	 *
+	 * @return int|null Positive id or null if not found.
+	 */
+	public static function getUserIdFromUsername( string $username ): ?int {
+		$username = trim( $username );
+		if ( $username === '' ) {
+			return null;
+		}
+		$wan = MediaWikiServices::getInstance()->getMainWANObjectCache();
+		$key = $wan->makeGlobalKey( 'pqroblox', 'roblox-username-to-id', md5( strtolower( str_replace( '_', ' ', $username ) ) ) );
+		$wrapped = $wan->get( $key );
+		if ( $wrapped !== false ) {
+			if ( $wrapped === '@@miss@@' ) {
+				return null;
+			}
+			$id = (int)$wrapped;
+			return $id > 0 ? $id : null;
+		}
+
+		$url = 'https://users.roblox.com/v1/usernames/users';
+		$req = MediaWikiServices::getInstance()->getHttpRequestFactory()->create(
+			$url,
+			[
+				'method' => 'POST',
+				'postData' => json_encode( [ 'usernames' => [ $username ] ], JSON_UNESCAPED_UNICODE ),
+				'timeout' => 8,
+				'connectTimeout' => 4,
+			],
+			__METHOD__
+		);
+		$req->setHeader( 'Content-Type', 'application/json' );
+		$req->setHeader( 'Accept', 'application/json' );
+		$status = $req->execute();
+		if ( !$status->isOK() || (int)$req->getStatus() !== 200 ) {
+			wfDebugLog( 'pqroblox', '[UsersApi] username lookup failed: ' . $username );
+			$wan->set( $key, '@@miss@@', self::CACHE_TTL_MISS );
+			return null;
+		}
+		$json = json_decode( $req->getContent(), true );
+		$data = $json['data'] ?? null;
+		if ( !is_array( $data ) || $data === [] ) {
+			$wan->set( $key, '@@miss@@', self::CACHE_TTL_MISS );
+			return null;
+		}
+		$first = $data[0];
+		if ( !is_array( $first ) || !isset( $first['id'] ) ) {
+			$wan->set( $key, '@@miss@@', self::CACHE_TTL_MISS );
+			return null;
+		}
+		$id = (int)$first['id'];
+		if ( $id <= 0 ) {
+			$wan->set( $key, '@@miss@@', self::CACHE_TTL_MISS );
+			return null;
+		}
+		$wan->set( $key, (string)$id, self::CACHE_TTL_GOOD );
+		return $id;
+	}
 }

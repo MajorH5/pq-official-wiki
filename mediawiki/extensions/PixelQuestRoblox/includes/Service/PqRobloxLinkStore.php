@@ -187,4 +187,23 @@ final class PqRobloxLinkStore {
 			->caller( __METHOD__ )
 			->execute();
 	}
+
+	/**
+	 * @return int|null Wiki user id linked to this Roblox account, if any.
+	 */
+	public function getWikiUserIdForRoblox( int $robloxUserId ): ?int {
+		if ( $robloxUserId <= 0 ) {
+			return null;
+		}
+		$row = $this->dbr()->newSelectQueryBuilder()
+			->select( 'prl_user_id' )
+			->from( 'pq_roblox_link' )
+			->where( [ 'prl_roblox_user_id' => $robloxUserId ] )
+			->caller( __METHOD__ )
+			->fetchRow();
+		if ( !$row ) {
+			return null;
+		}
+		return (int)$row->prl_user_id;
+	}
 }

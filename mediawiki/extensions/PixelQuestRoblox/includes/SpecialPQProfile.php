@@ -4,30 +4,30 @@ namespace PixelQuestRoblox;
 
 use MediaWiki\MediaWikiServices;
 use MediaWiki\SpecialPage\SpecialPage;
+use MediaWiki\Title\Title;
 use MediaWiki\User\User;
 use PixelQuestRoblox\Service\PqRobloxDataStoreClient;
 use PixelQuestRoblox\Service\PqRobloxFriendService;
 use PixelQuestRoblox\Service\PqRobloxLinkStore;
 use PixelQuestRoblox\Service\PqRobloxLookupIndex;
+use PixelQuestRoblox\Service\PqRobloxPlayerIndexStore;
 use PixelQuestRoblox\Service\PqRobloxUsersApi;
 
-final class SpecialRobloxProfile extends SpecialPage {
+final class SpecialPQProfile extends SpecialPage {
 
 	public function __construct() {
-		parent::__construct( 'RobloxProfile' );
+		parent::__construct( 'PQProfile' );
 	}
 
 	public function execute( $subPage ): void {
 		$this->setHeaders();
 		$out = $this->getOutput();
-		$out->setPageTitle( $this->msg( 'robloxprofile' )->text() );
-		// Allow same-origin embedding for User: page profile preview iframe.
+		$out->setPageTitle( $this->msg( 'pqprofile' )->text() );
 		$out->setPreventClickjacking( false );
 		$viewer = $this->getUser();
 		$req = $this->getRequest();
 		$isEmbed = $req->getBool( 'embed' ) || strtolower( (string)$req->getVal( 'action', '' ) ) === 'render';
 		if ( $isEmbed ) {
-			// Render only the special-page content (no skin chrome/sidebar/toolboxes).
 			$out->setArticleBodyOnly( true );
 		}
 		$charPage = max( 1, (int)$req->getInt( 'charpage', 1 ) );
@@ -60,6 +60,7 @@ final class SpecialRobloxProfile extends SpecialPage {
 			'pq-roblox-panel-characters',
 			'pq-roblox-panel-graveyard',
 			'pq-roblox-panel-skins',
+			'pq-roblox-panel-badges',
 			'pq-roblox-panel-vault',
 			'pq-roblox-panel-account-stats',
 			'pq-roblox-panel-settings',
@@ -68,6 +69,9 @@ final class SpecialRobloxProfile extends SpecialPage {
 			$activeTab = null;
 		}
 
+		$store = new PqRobloxLinkStore();
+		$indexStore = new PqRobloxPlayerIndexStore();
+
 		$sub = is_string( $subPage ) ? trim( $subPage ) : '';
 		if ( $sub === '' ) {
 			if ( !$viewer->isRegistered() ) {
@@ -75,23 +79,59 @@ final class SpecialRobloxProfile extends SpecialPage {
 				return;
 			}
 			$target = $viewer;
-		} else {
-			$name = str_replace( '_', ' ', $sub );
-			$u = User::newFromName( $name, false );
-			if ( !$u || !$u->isRegistered() ) {
-				$out->addWikiMsg( 'pqroblox-profile-user-not-found' );
+			$link = $store->getLinkForWikiUser( $target->getId() );
+			if ( $link === null ) {
+				$out->addWikiMsg( 'pqroblox-profile-not-linked', $target->getName() );
 				return;
 			}
-			$target = $u;
+			$robloxId = (int)$link['robloxUserId'];
+		} else {
+			$subLower = strtolower( $sub );
+			if ( str_starts_with( $subLower, 'wiki/' ) ) {
+				$wikiName = trim( str_replace( '_', ' ', substr( $sub, strlen( 'wiki/' ) ) ) );
+				$u = User::newFromName( $wikiName, false );
+				if ( !$u || !$u->isRegistered() ) {
+					$out->addWikiMsg( 'pqroblox-profile-user-not-found' );
+					return;
+				}
+				$link = $store->getLinkForWikiUser( $u->getId() );
+				if ( $link === null ) {
+					$out->addWikiMsg( 'pqroblox-profile-not-linked', $u->getName() );
+					return;
+				}
+				$rid = (int)$link['robloxUserId'];
+				$out->redirect( Title::makeTitle( NS_SPECIAL, 'PQProfile/' . $rid )->getFullURL() );
+				return;
+			}
+
+			$name = str_replace( '_', ' ', $sub );
+			if ( preg_match( '/^\d+$/', $name ) ) {
+				$robloxId = (int)$name;
+				if ( $robloxId <= 0 ) {
+					$out->addWikiMsg( 'pqroblox-profile-not-found-roblox' );
+					return;
+				}
+			} else {
+				$row = $indexStore->findByUsername( $name );
+				if ( $row !== null ) {
+					$robloxId = (int)$row['robloxUserId'];
+				} else {
+					$resolved = PqRobloxUsersApi::getUserIdFromUsername( $name );
+					if ( $resolved === null || $resolved <= 0 ) {
+						$out->addWikiMsg( 'pqroblox-profile-not-found-roblox' );
+						return;
+					}
+					$robloxId = $resolved;
+				}
+			}
 		}
 
-		$store = new PqRobloxLinkStore();
-		$link = $store->getLinkForWikiUser( $target->getId() );
-		if ( $link === null ) {
-			$out->addWikiMsg( 'pqroblox-profile-not-linked', $target->getName() );
-			return;
+		$linkedWikiId = $store->getWikiUserIdForRoblox( $robloxId );
+		if ( $linkedWikiId !== null ) {
+			$target = User::newFromId( $linkedWikiId );
+		} else {
+			$target = User::newFromId( 0 );
 		}
-		$robloxId = (int)$link['robloxUserId'];
 
 		$viewerRobloxId = null;
 		if ( $viewer->isRegistered() ) {
@@ -107,15 +147,22 @@ final class SpecialRobloxProfile extends SpecialPage {
 				$this->msg( 'pqroblox-special-profile-pagetitle', $robloxPublic['name'] )->text()
 			);
 		} else {
-			$out->setPageTitle( $this->msg( 'special-robloxprofile' )->text() );
+			$out->setPageTitle( $this->msg( 'special-pqprofile' )->text() );
 		}
 
-		$isOwner = $viewer->isRegistered() && $viewer->getId() === $target->getId();
+		$isProfileOwner = self::computeProfileOwner( $viewer, $target, $viewerRobloxId, $robloxId );
 		$forceRefresh = $req->getBool( 'pqroblox_refresh' )
-			&& ( $isOwner || $viewer->isAllowed( 'userrights' ) );
+			&& ( $isProfileOwner || $viewer->isAllowed( 'userrights' ) );
 
 		$playerData = PqRobloxDataStoreClient::getPlayerDataForRobloxUser( $robloxId, $forceRefresh );
-		$show = self::resolveVisibility( $viewer, $target, $isOwner, $viewerRobloxId, $robloxId );
+		if ( $playerData !== null ) {
+			$indexName = null;
+			if ( $robloxPublic !== null && isset( $robloxPublic['name'] ) && $robloxPublic['name'] !== '' ) {
+				$indexName = $robloxPublic['name'];
+			}
+			$indexStore->upsert( $robloxId, $indexName );
+		}
+		$show = self::resolveVisibility( $viewer, $target, $isProfileOwner, $viewerRobloxId, $robloxId );
 		$lookup = PqRobloxLookupIndex::instance();
 
 		RobloxProfileRenderer::render(
@@ -138,10 +185,21 @@ final class SpecialRobloxProfile extends SpecialPage {
 			$vaultType,
 			$vaultQ,
 			$activeTab,
-			$robloxPublic
+			$robloxPublic,
+			$isProfileOwner
 		);
+	}
 
-		// Owner hint is rendered in RobloxProfileRenderer (top + bottom blocks).
+	private static function computeProfileOwner(
+		User $viewer,
+		User $target,
+		?int $viewerRobloxId,
+		int $targetRobloxId
+	): bool {
+		if ( $viewer->isRegistered() && $target->isRegistered() && $viewer->getId() === $target->getId() ) {
+			return true;
+		}
+		return $viewerRobloxId !== null && $viewerRobloxId > 0 && $viewerRobloxId === $targetRobloxId;
 	}
 
 	/**
@@ -154,6 +212,36 @@ final class SpecialRobloxProfile extends SpecialPage {
 		?int $viewerRobloxId,
 		int $targetRobloxId
 	): array {
+		if ( !$target->isRegistered() ) {
+			if ( $isOwner ) {
+				return [
+					'valor' => true,
+					'last_seen' => true,
+					'characters' => true,
+					'characters_detail' => true,
+					'characters_inventory' => true,
+					'graveyard' => true,
+					'skins' => true,
+					'badges' => true,
+					'honor' => true,
+					'vault' => true,
+					'account_stats' => true,
+				];
+			}
+			return [
+				'valor' => false,
+				'last_seen' => true,
+				'characters' => true,
+				'characters_detail' => false,
+				'characters_inventory' => false,
+				'graveyard' => true,
+				'skins' => false,
+				'badges' => true,
+				'honor' => true,
+				'vault' => false,
+				'account_stats' => false,
+			];
+		}
 		if ( $isOwner ) {
 			return [
 				'valor' => true,
@@ -163,6 +251,8 @@ final class SpecialRobloxProfile extends SpecialPage {
 				'characters_inventory' => true,
 				'graveyard' => true,
 				'skins' => true,
+				'badges' => true,
+				'honor' => true,
 				'vault' => true,
 				'account_stats' => true,
 			];
@@ -170,7 +260,6 @@ final class SpecialRobloxProfile extends SpecialPage {
 		$userOptionsLookup = MediaWikiServices::getInstance()->getUserOptionsLookup();
 
 		$getState = static function ( string $key ) use ( $target, $userOptionsLookup ): string {
-			// Legacy support: old boolean toggles were stored as '1'/'0'.
 			return (string)$userOptionsLookup->getOption( $target, $key, '0' );
 		};
 
@@ -181,6 +270,8 @@ final class SpecialRobloxProfile extends SpecialPage {
 		$stateCharsInv = $getState( 'pqroblox-pub-characters-inventory' );
 		$stateGrave = $getState( 'pqroblox-pub-graveyard' );
 		$stateSkins = $getState( 'pqroblox-pub-skins' );
+		$stateBadges = $getState( 'pqroblox-pub-badges' );
+		$stateHonor = $getState( 'pqroblox-pub-honor' );
 		$stateVault = $getState( 'pqroblox-pub-vault' );
 		$stateAccountStats = $getState( 'pqroblox-pub-account-stats' );
 
@@ -192,6 +283,8 @@ final class SpecialRobloxProfile extends SpecialPage {
 			|| $stateCharsInv === 'friends'
 			|| $stateGrave === 'friends'
 			|| $stateSkins === 'friends'
+			|| $stateBadges === 'friends'
+			|| $stateHonor === 'friends'
 			|| $stateVault === 'friends'
 			|| $stateAccountStats === 'friends';
 
@@ -200,7 +293,6 @@ final class SpecialRobloxProfile extends SpecialPage {
 			$friendOk = PqRobloxFriendService::areRobloxUsersFriends( $viewerRobloxId, $targetRobloxId );
 		}
 
-		// Placeholder: guild-mates logic will be added later.
 		$guildOk = false;
 
 		$stateToVisible = static function ( string $state ) use ( $friendOk, $guildOk ): bool {
@@ -216,7 +308,6 @@ final class SpecialRobloxProfile extends SpecialPage {
 			if ( $state === 'guildmates' ) {
 				return $guildOk;
 			}
-			// Unknown values are treated as "no".
 			return false;
 		};
 
@@ -229,6 +320,8 @@ final class SpecialRobloxProfile extends SpecialPage {
 			'characters_inventory' => $chars && $stateToVisible( $stateCharsInv ),
 			'graveyard' => $stateToVisible( $stateGrave ),
 			'skins' => $stateToVisible( $stateSkins ),
+			'badges' => $stateToVisible( $stateBadges ),
+			'honor' => $stateToVisible( $stateHonor ),
 			'vault' => $stateToVisible( $stateVault ),
 			'account_stats' => $stateToVisible( $stateAccountStats ),
 		];

@@ -8,6 +8,7 @@ use MediaWiki\Output\OutputPage;
 use MediaWiki\Title\Title;
 use MediaWiki\User\User;
 use MediaWiki\Utils\MWTimestamp;
+use PixelQuestRoblox\Service\PqRobloxHonorService;
 use PixelQuestRoblox\Service\PqRobloxLookupIndex;
 use PixelQuestRoblox\Service\PqRobloxPlayerDataParser;
 use PixelQuestRoblox\PqRobloxConfig;
@@ -89,6 +90,7 @@ final class RobloxProfileRenderer {
 	/**
 	 * @param array<string, bool> $show
 	 * @param array{name: string, displayName: string}|null $robloxPublic from users.roblox.com (cached)
+	 * @param bool|null $profileOwnerHint When set, overrides wiki-only owner detection (Roblox-linked viewers).
 	 */
 	public static function render(
 		OutputPage $out,
@@ -110,11 +112,16 @@ final class RobloxProfileRenderer {
 		string $vaultType = '',
 		string $vaultQ = '',
 		?string $activeTab = null,
-		?array $robloxPublic = null
+		?array $robloxPublic = null,
+		?bool $profileOwnerHint = null
 	): void {
 		$out->addModuleStyles( 'ext.pqroblox.profile' );
 		$out->addModules( [ 'ext.pqroblox.profile' ] );
-		$isOwner = $viewer->isRegistered() && $viewer->getId() === $target->getId();
+		if ( $profileOwnerHint !== null ) {
+			$isOwner = $profileOwnerHint;
+		} else {
+			$isOwner = $viewer->isRegistered() && $viewer->getId() === $target->getId();
+		}
 		$out->addHTML( self::htmlProfileLead( $ctx, $robloxUserId, $robloxPublic ) );
 
 		if ( $playerData === null ) {
@@ -142,7 +149,7 @@ final class RobloxProfileRenderer {
 		$lang = $ctx->getLanguage();
 		$title = $out->getTitle() ?? $ctx->getTitle();
 		if ( !$title instanceof Title ) {
-			$title = Title::newFromText( 'Special:RobloxProfile' );
+			$title = Title::newFromText( 'Special:PQProfile' );
 		}
 
 		if ( $isOwner ) {
@@ -150,7 +157,9 @@ final class RobloxProfileRenderer {
 				[
 					'id' => 'pq-roblox-panel-characters',
 					'labelKey' => 'pqroblox-tab-characters',
-					'html' => self::htmlCharacters( $ctx, $lookup, $playerData, $show, $target, $title, $charPage ),
+					'html' => self::htmlCharacters(
+						$ctx, $lookup, $playerData, $show, $target, $title, $charPage, $robloxUserId, $isOwner
+					),
 				],
 				[
 					'id' => 'pq-roblox-panel-graveyard',
@@ -172,6 +181,11 @@ final class RobloxProfileRenderer {
 					'id' => 'pq-roblox-panel-skins',
 					'labelKey' => 'pqroblox-tab-skins',
 					'html' => self::htmlSkinGrid( $ctx, $lookup, $playerData ),
+				],
+				[
+					'id' => 'pq-roblox-panel-badges',
+					'labelKey' => 'pqroblox-tab-badges',
+					'html' => self::htmlBadgeGrid( $ctx, $lookup, $playerData ),
 				],
 				[
 					'id' => 'pq-roblox-panel-vault',
@@ -196,7 +210,9 @@ final class RobloxProfileRenderer {
 					'id' => 'pq-roblox-panel-characters',
 					'labelKey' => 'pqroblox-tab-characters',
 					'html' => !empty( $show['characters'] )
-						? self::htmlCharacters( $ctx, $lookup, $playerData, $show, $target, $title, $charPage )
+						? self::htmlCharacters(
+							$ctx, $lookup, $playerData, $show, $target, $title, $charPage, $robloxUserId, $isOwner
+						)
 						: $hiddenHtml,
 				],
 				[
@@ -222,6 +238,13 @@ final class RobloxProfileRenderer {
 					'labelKey' => 'pqroblox-tab-skins',
 					'html' => !empty( $show['skins'] )
 						? self::htmlSkinGrid( $ctx, $lookup, $playerData )
+						: $hiddenHtml,
+				],
+				[
+					'id' => 'pq-roblox-panel-badges',
+					'labelKey' => 'pqroblox-tab-badges',
+					'html' => !empty( $show['badges'] )
+						? self::htmlBadgeGrid( $ctx, $lookup, $playerData )
 						: $hiddenHtml,
 				],
 				[
@@ -347,13 +370,19 @@ final class RobloxProfileRenderer {
 		}
 
 		$joined = null;
-		if ( array_key_exists( 'ProfileCreateTime', $playerData ) && is_numeric( $playerData['ProfileCreateTime'] ) ) {
-			$t = (float)$playerData['ProfileCreateTime'];
+		$joinedUnix = null;
+		$pctRaw = $playerData['ProfileCreateTime'] ?? null;
+		if ( ( $pctRaw === null || !is_numeric( $pctRaw ) ) && is_array( $meta ) ) {
+			$pctRaw = $meta['ProfileCreateTime'] ?? $meta['profileCreateTime'] ?? null;
+		}
+		if ( is_numeric( $pctRaw ) ) {
+			$t = (float)$pctRaw;
 			while ( $t > 1e12 ) {
 				$t /= 1000.0;
 			}
 			$ti = (int)floor( $t );
 			if ( $ti > 0 ) {
+				$joinedUnix = $ti;
 				$joined = gmdate( 'Y-m-d', $ti );
 			}
 		}
@@ -375,14 +404,18 @@ final class RobloxProfileRenderer {
 		if ( $online ) {
 			$lastSeenNow = Html::element( 'p', [ 'class' => 'pq-roblox-last-seen-line' ], 'Last seen (approx.): now' );
 			$joinedLine = $joined !== null
-				? Html::element( 'p', [ 'class' => 'pq-roblox-last-seen-line pq-roblox-muted' ], 'Joined: ' . $joined )
+				? Html::element(
+					'p',
+					[ 'class' => 'pq-roblox-last-seen-line pq-roblox-muted' ],
+					self::formatJoinedLine( $joined, $joinedUnix )
+				)
 				: '';
 			return Html::rawElement( 'div', [ 'class' => $cls ], $statusLine . $lastSeenNow . $joinedLine );
 		}
 
 		if ( $resolved === null ) {
 			// lastSeen missing: still show join date if available.
-			$lastSeenText = $joined !== null ? ( 'Joined: ' . $joined ) : 'Last seen: —';
+			$lastSeenText = $joined !== null ? self::formatJoinedLine( $joined, $joinedUnix ) : 'Last seen: —';
 			return Html::rawElement( 'div', [ 'class' => $cls ],
 				$statusLine . Html::element( 'p', [ 'class' => 'pq-roblox-last-seen-line' ], $lastSeenText ) );
 		}
@@ -396,12 +429,24 @@ final class RobloxProfileRenderer {
 			$lastSeenText = 'Last seen: ' . $formatted;
 		}
 		$joinedLine = $joined !== null
-			? Html::element( 'p', [ 'class' => 'pq-roblox-last-seen-line pq-roblox-muted' ], 'Joined: ' . $joined )
+			? Html::element(
+				'p',
+				[ 'class' => 'pq-roblox-last-seen-line pq-roblox-muted' ],
+				self::formatJoinedLine( $joined, $joinedUnix )
+			)
 			: '';
 		return Html::rawElement( 'div', [ 'class' => $cls ],
 			$statusLine
 			. Html::element( 'p', [ 'class' => 'pq-roblox-last-seen-line' ], $lastSeenText )
 			. $joinedLine );
+	}
+
+	private static function formatJoinedLine( string $joinedDate, ?int $joinedUnix ): string {
+		if ( $joinedUnix !== null && $joinedUnix > 0 ) {
+			$ago = self::formatLastSeenRelativeAgo( $joinedUnix );
+			return 'Joined: ' . $joinedDate . ' (approx. ' . $ago . ')';
+		}
+		return 'Joined: ' . $joinedDate;
 	}
 
 	private static function formatApproxLastSeenDays( int $unixMidnight ): string {
@@ -621,7 +666,9 @@ final class RobloxProfileRenderer {
 		array $show,
 		User $target,
 		Title $title,
-		int $charPage
+		int $charPage,
+		int $robloxUserId,
+		bool $isOwner
 	): string {
 		$chars = PqRobloxPlayerDataParser::getCharactersMap( $playerData );
 		$html = '';
@@ -638,10 +685,52 @@ final class RobloxProfileRenderer {
 		$detail = !empty( $show['characters_detail'] );
 		$invPref = !empty( $show['characters_inventory'] );
 
+		$honorDisplay = null;
+		if ( $isOwner || !empty( $show['honor'] ) ) {
+			$honorDisplay = PqRobloxHonorService::computeForPlayerData( $lookup, $playerData, $robloxUserId );
+		}
+		$showBadgeUi = $isOwner || !empty( $show['badges'] );
+		$showHonorUi = $isOwner || !empty( $show['honor'] );
+
+		$charPage = max( 1, $charPage );
+		$per = 15;
+		$total = count( $chars );
+		$pages = (int)max( 1, ceil( $total / $per ) );
+		$charPage = min( $charPage, $pages );
+		$offset = ( $charPage - 1 ) * $per;
+		$slice = array_slice( $chars, $offset, $per, true );
+
+		$hasLow = false;
+		$hasHigh = false;
+		$anyLevel = false;
+		foreach ( $slice as $char ) {
+			if ( !is_array( $char ) ) {
+				continue;
+			}
+			$lvl = PqRobloxPlayerDataParser::getCharacterLevel( $char );
+			if ( $lvl !== null ) {
+				$anyLevel = true;
+				if ( $lvl < 100 ) {
+					$hasLow = true;
+				} else {
+					$hasHigh = true;
+				}
+			}
+		}
+		if ( !$anyLevel ) {
+			$valorHeader = $ctx->msg( 'pqroblox-profile-col-valor' )->text();
+		} elseif ( $hasLow && !$hasHigh ) {
+			$valorHeader = $ctx->msg( 'pqroblox-profile-col-exp' )->text();
+		} elseif ( !$hasLow && $hasHigh ) {
+			$valorHeader = $ctx->msg( 'pqroblox-profile-col-valor' )->text();
+		} else {
+			$valorHeader = $ctx->msg( 'pqroblox-profile-col-exp-valor-mixed' )->text();
+		}
+
 		$headCells = [
 			Html::element( 'th', [ 'class' => 'pq-roblox-col-name' ], $ctx->msg( 'pqroblox-profile-col-name' )->text() ),
 			Html::element( 'th', [ 'class' => 'pq-roblox-col-lvl' ], $ctx->msg( 'pqroblox-profile-col-level' )->text() ),
-			Html::element( 'th', [ 'class' => 'pq-roblox-col-valor' ], $ctx->msg( 'pqroblox-profile-col-valor' )->text() ),
+			Html::element( 'th', [ 'class' => 'pq-roblox-col-valor' ], $valorHeader ),
 		];
 		if ( $detail ) {
 			$headCells[] = Html::element( 'th', [ 'class' => 'pq-roblox-col-eq' ],
@@ -655,20 +744,24 @@ final class RobloxProfileRenderer {
 		}
 
 		$thead = Html::rawElement( 'thead', [], Html::rawElement( 'tr', [], implode( '', $headCells ) ) );
-		$charPage = max( 1, $charPage );
-		$per = 15;
-		$total = count( $chars );
-		$pages = (int)max( 1, ceil( $total / $per ) );
-		$charPage = min( $charPage, $pages );
-		$offset = ( $charPage - 1 ) * $per;
-		$slice = array_slice( $chars, $offset, $per, true );
 
+		$lang = $ctx->getLanguage();
 		$rows = '';
 		foreach ( $slice as $slot => $char ) {
 			if ( !is_array( $char ) ) {
 				continue;
 			}
-			$rows .= self::characterRow( $lookup, $char, $slot, $detail, $invPref );
+			$rows .= self::characterRow(
+				$lookup,
+				$char,
+				$slot,
+				$detail,
+				$invPref,
+				$honorDisplay,
+				$showBadgeUi,
+				$showHonorUi,
+				$lang
+			);
 		}
 
 		$base = [ 'tab' => 'pq-roblox-panel-characters' ];
@@ -715,26 +808,52 @@ final class RobloxProfileRenderer {
 		array $char,
 		string $slot,
 		bool $detail,
-		bool $invPref
+		bool $invPref,
+		?array $honorDisplay,
+		bool $showBadgeUi,
+		bool $showHonorUi,
+		\MediaWiki\Language\Language $lang
 	): string {
 		$name = (string)( $char['characterName'] ?? $char['CharacterName'] ?? ( 'Character ' . $slot ) );
 		$skinId = (int)( $char['characterSkinId'] ?? $char['CharacterSkinId'] ?? 0 );
 		$skinTitle = Title::newFromText( $lookup->getSkinPageTitle( $skinId ) );
-		$skinUrl = $skinId > 0 ? $lookup->getSkinGridIconUrl( $skinId ) : null;
-		$skinPart = $skinId > 0
+		$skinUrl = $lookup->getSkinGridIconUrl( $skinId );
+		$skinPart = ( $skinUrl !== null && $skinUrl !== '' )
 			? self::iconOnlyLink( $skinTitle, $skinUrl, 'pq-roblox-char-skin-ico', self::SKIN_ICON_PX )
 			: '';
+		$badgePart = '';
+		if ( $showBadgeUi ) {
+			$bid = PqRobloxPlayerDataParser::getEquippedBadgeIdForCharacter( $char );
+			if ( $bid > 0 ) {
+				$bTitle = Title::newFromText( $lookup->getBadgePageTitle( $bid ) );
+				$bUrl = $lookup->getBadgeWikiIconUrl( $bid );
+				$badgePart = self::iconOnlyLink( $bTitle, $bUrl, 'pq-roblox-badge-ico', self::SKIN_ICON_PX );
+			}
+		}
+		$honorPart = '';
+		if ( $showHonorUi ) {
+			$honorPart = ' ' . self::honorWithIconHtml( $lookup, $honorDisplay );
+		}
 		$nameCell = Html::rawElement( 'div', [ 'class' => 'pq-roblox-name-cell' ],
 			Html::element( 'span', [ 'class' => 'pq-roblox-char-name' ], $name )
 			. ( $skinPart !== '' ? ' ' . $skinPart : '' )
+			. ( $badgePart !== '' ? ' ' . $badgePart : '' )
+			. ( $honorPart !== '' ? $honorPart : '' )
 		);
 
 		$cLvl = PqRobloxPlayerDataParser::getCharacterLevel( $char );
 		$lvlCell = Html::element( 'td', [ 'class' => 'pq-roblox-td-c pq-roblox-td-tight pq-roblox-col-lvl' ],
 			$cLvl !== null ? (string)$cLvl : '—' );
 
-		$valorInt = (int)floor( PqRobloxPlayerDataParser::characterValorFromExp( $char ) );
-		$valorHtml = self::valorWithIconHtml( $valorInt );
+		$showExp = $cLvl !== null && $cLvl < 100;
+		if ( $showExp ) {
+			$expRaw = isset( $char['experience'] ) ? (float)$char['experience'] : 0.0;
+			$expStr = $lang->formatNum( (int)floor( $expRaw ) );
+			$valorHtml = htmlspecialchars( $expStr, ENT_QUOTES ) . ' EXP';
+		} else {
+			$valorInt = (int)floor( PqRobloxPlayerDataParser::characterValorFromExp( $char ) );
+			$valorHtml = self::valorWithIconHtml( $valorInt );
+		}
 		$valorCell = Html::rawElement(
 			'td',
 			[ 'class' => 'pq-roblox-td-c pq-roblox-td-tight pq-roblox-col-valor' ],
@@ -1050,6 +1169,29 @@ final class RobloxProfileRenderer {
 			return (string)$v;
 		}
 		return '—';
+	}
+
+	private static function honorWithIconHtml( PqRobloxLookupIndex $lookup, ?array $honorDisplay ): string {
+		$rankId = 0;
+		$txt = '—';
+		if ( $honorDisplay !== null ) {
+			$rankId = (int)( $honorDisplay['rankId'] ?? 0 );
+			$txt = (string)(int)round( $honorDisplay['total'] ?? 0 );
+		}
+		$url = PqRobloxHonorService::honorIconUrlForRank( $lookup, $rankId );
+		if ( $url === null ) {
+			$url = PqRobloxHonorService::honorIconUrlForRank( $lookup, 0 );
+		}
+		if ( $url === null ) {
+			return Html::element( 'span', [ 'class' => 'pq-roblox-honor-text' ], $txt );
+		}
+		$urlEsc = htmlspecialchars( $url, ENT_QUOTES );
+		$px = self::VALOR_ICON_PX;
+		return '<span class="pq-roblox-honor-with-ico">'
+			. '<img src="' . $urlEsc . '" alt="" title="Honor" width="' . $px
+			. '" height="' . $px . '" class="pq-roblox-honor-ico-img" loading="lazy" />'
+			. '<span class="pq-roblox-honor-text">' . htmlspecialchars( $txt, ENT_QUOTES ) . '</span>'
+			. '</span>';
 	}
 
 	private static function valorWithIconHtml( mixed $valor ): string {
@@ -1382,8 +1524,8 @@ final class RobloxProfileRenderer {
 		$valor = PqRobloxPlayerDataParser::graveField( $rec, 4 );
 		$skinId = (int)( PqRobloxPlayerDataParser::graveField( $rec, 6 ) ?? 0 );
 		$skinT = Title::newFromText( $lookup->getSkinPageTitle( $skinId ) );
-		$skinUrl = $skinId > 0 ? $lookup->getSkinGridIconUrl( $skinId ) : null;
-		$skinCell = $skinId > 0
+		$skinUrl = $lookup->getSkinGridIconUrl( $skinId );
+		$skinCell = ( $skinUrl !== null && $skinUrl !== '' )
 			? Html::rawElement( 'td', [ 'class' => 'pq-roblox-td-c pq-roblox-td-tight' ],
 				self::iconOnlyLink( $skinT, $skinUrl, 'pq-roblox-grave-ico', self::SKIN_ICON_PX ) )
 			: Html::element( 'td', [ 'class' => 'pq-roblox-td-c pq-roblox-td-tight' ], '—' );
@@ -1477,6 +1619,37 @@ final class RobloxProfileRenderer {
 			}
 			$cls = 'pq-roblox-skin-cell' . ( $has ? '' : ' pq-roblox-skin-locked' );
 			$slot = Html::rawElement( 'div', [ 'class' => 'pq-roblox-inv-slot' ], $link . $qtyHtml );
+			$html .= Html::rawElement( 'div', [ 'class' => $cls ], $slot );
+		}
+		return Html::rawElement( 'div', [ 'class' => 'pq-roblox-skin-grid' ], $html );
+	}
+
+	/**
+	 * @param array<string, mixed> $playerData
+	 */
+	private static function htmlBadgeGrid(
+		IContextSource $ctx,
+		PqRobloxLookupIndex $lookup,
+		array $playerData
+	): string {
+		$ownedList = PqRobloxPlayerDataParser::getOwnedBadgeIds( $playerData );
+		$owned = [];
+		foreach ( $ownedList as $id ) {
+			$owned[(int)$id] = true;
+		}
+		$ids = $lookup->getAllBadgeIdsOrdered();
+		if ( $ids === [] ) {
+			return Html::element( 'p', [ 'class' => 'pq-roblox-muted' ], $ctx->msg( 'pqroblox-profile-no-datadump-badges' )->text() );
+		}
+
+		$html = '';
+		foreach ( $ids as $bid ) {
+			$has = !empty( $owned[(int)$bid] );
+			$t = Title::newFromText( $lookup->getBadgePageTitle( $bid ) );
+			$url = $lookup->getBadgeWikiIconUrl( $bid );
+			$link = self::iconOnlyLink( $t, $url, 'pq-roblox-inv-ico', self::SKIN_ICON_PX );
+			$cls = 'pq-roblox-skin-cell' . ( $has ? '' : ' pq-roblox-skin-locked' );
+			$slot = Html::rawElement( 'div', [ 'class' => 'pq-roblox-inv-slot' ], $link );
 			$html .= Html::rawElement( 'div', [ 'class' => $cls ], $slot );
 		}
 		return Html::rawElement( 'div', [ 'class' => 'pq-roblox-skin-grid' ], $html );

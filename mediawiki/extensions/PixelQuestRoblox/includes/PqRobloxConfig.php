@@ -93,6 +93,16 @@ final class PqRobloxConfig {
 		return 0.25;
 	}
 
+	public static function getRecaptchaSiteKey(): string {
+		$v = getenv( 'PQ_RECAPTCHA_SITE_KEY' );
+		return is_string( $v ) ? trim( $v ) : '';
+	}
+
+	public static function getRecaptchaSecretKey(): string {
+		$v = getenv( 'PQ_RECAPTCHA_SECRET_KEY' );
+		return is_string( $v ) ? trim( $v ) : '';
+	}
+
 	public static function getGraveyardPerPage(): int {
 		global $wgPqRobloxGraveyardPerPage;
 		if ( isset( $wgPqRobloxGraveyardPerPage ) && is_int( $wgPqRobloxGraveyardPerPage ) && $wgPqRobloxGraveyardPerPage > 0 ) {

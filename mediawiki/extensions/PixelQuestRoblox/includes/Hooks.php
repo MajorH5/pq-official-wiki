@@ -12,6 +12,7 @@ use PixelQuestRoblox\Service\PqRobloxDataStoreClient;
 use PixelQuestRoblox\Service\PqRobloxFriendService;
 use PixelQuestRoblox\Service\PqRobloxLinkStore;
 use PixelQuestRoblox\Service\PqRobloxLookupIndex;
+use PixelQuestRoblox\Service\PqRobloxPlayerIndexStore;
 use PixelQuestRoblox\Service\PqRobloxUsersApi;
 
 final class Hooks {
@@ -25,6 +26,10 @@ final class Hooks {
 		$updater->addExtensionTable(
 			'pq_roblox_link',
 			"$base/pq_roblox_link.sql"
+		);
+		$updater->addExtensionTable(
+			'pq_roblox_player_index',
+			"$base/pq_roblox_player_index.sql"
 		);
 	}
 
@@ -43,7 +48,9 @@ final class Hooks {
 		$def['pqroblox-pub-characters-detail'] = 'everyone';
 		$def['pqroblox-pub-characters-inventory'] = 'none';
 		$def['pqroblox-pub-graveyard'] = 'everyone';
-		$def['pqroblox-pub-skins'] = 'everyone';
+		$def['pqroblox-pub-skins'] = 'none';
+		$def['pqroblox-pub-badges'] = 'everyone';
+		$def['pqroblox-pub-honor'] = 'everyone';
 		$def['pqroblox-pub-vault'] = 'none';
 		$def['pqroblox-pub-account-stats'] = 'none';
 	}
@@ -126,6 +133,18 @@ final class Hooks {
 			'pqroblox-pub-skins',
 			'pqroblox-pref-skins',
 			'pqroblox-pref-skins-help',
+			'none'
+		);
+		$makeSelect(
+			'pqroblox-pub-badges',
+			'pqroblox-pref-badges',
+			'pqroblox-pref-badges-help',
+			'everyone'
+		);
+		$makeSelect(
+			'pqroblox-pub-honor',
+			'pqroblox-pref-honor',
+			'pqroblox-pref-honor-help',
 			'everyone'
 		);
 		$makeSelect(
@@ -150,7 +169,7 @@ final class Hooks {
 	 */
 	public static function onOutputPageBeforeHTML( OutputPage $out, &$text ): void {
 		$title = $out->getTitle();
-		if ( !$title instanceof Title || $title->getNamespace() !== NS_USER ) {
+		if ( !$title instanceof Title || $title->getNamespace() !== \NS_USER ) {
 			return;
 		}
 		if ( $title->isSubpage() ) {
@@ -202,6 +221,7 @@ final class Hooks {
 			'pq-roblox-panel-characters',
 			'pq-roblox-panel-graveyard',
 			'pq-roblox-panel-skins',
+			'pq-roblox-panel-badges',
 			'pq-roblox-panel-vault',
 			'pq-roblox-panel-account-stats',
 			'pq-roblox-panel-settings',
@@ -224,7 +244,7 @@ final class Hooks {
 		$playerData = PqRobloxDataStoreClient::getPlayerDataForRobloxUser( $robloxId, false );
 		$lookup = PqRobloxLookupIndex::instance();
 
-		$special = Title::newFromText( 'Special:RobloxProfile/' . str_replace( ' ', '_', $target->getName() ) );
+		$special = Title::makeTitle( \NS_SPECIAL, 'PQProfile/' . (int)$robloxId );
 		$openLabel = htmlspecialchars( $out->getContext()->msg( 'pqroblox-userpage-preview-open' )->text(), ENT_QUOTES );
 		$openHref = $special ? htmlspecialchars( $special->getFullURL(), ENT_QUOTES ) : '#';
 
@@ -269,13 +289,14 @@ final class Hooks {
 			$vaultType,
 			$vaultQ,
 			$activeTab,
-			$robloxPublic
+			$robloxPublic,
+			$isOwner
 		);
 		$out->addHTML( '</section>' );
 	}
 
 	/**
-	 * Shared visibility resolver used by Special:RobloxProfile and User: page embeds.
+	 * Shared visibility resolver used by Special:PQProfile and User: page embeds.
 	 *
 	 * @return array<string, bool>
 	 */
@@ -295,6 +316,8 @@ final class Hooks {
 				'characters_inventory' => true,
 				'graveyard' => true,
 				'skins' => true,
+				'badges' => true,
+				'honor' => true,
 				'vault' => true,
 				'account_stats' => true,
 			];
@@ -312,6 +335,8 @@ final class Hooks {
 		$stateCharsInv = $getState( 'pqroblox-pub-characters-inventory' );
 		$stateGrave = $getState( 'pqroblox-pub-graveyard' );
 		$stateSkins = $getState( 'pqroblox-pub-skins' );
+		$stateBadges = $getState( 'pqroblox-pub-badges' );
+		$stateHonor = $getState( 'pqroblox-pub-honor' );
 		$stateVault = $getState( 'pqroblox-pub-vault' );
 		$stateAccountStats = $getState( 'pqroblox-pub-account-stats' );
 
@@ -323,6 +348,8 @@ final class Hooks {
 			|| $stateCharsInv === 'friends'
 			|| $stateGrave === 'friends'
 			|| $stateSkins === 'friends'
+			|| $stateBadges === 'friends'
+			|| $stateHonor === 'friends'
 			|| $stateVault === 'friends'
 			|| $stateAccountStats === 'friends';
 
@@ -357,8 +384,90 @@ final class Hooks {
 			'characters_inventory' => $chars && $stateToVisible( $stateCharsInv ),
 			'graveyard' => $stateToVisible( $stateGrave ),
 			'skins' => $stateToVisible( $stateSkins ),
+			'badges' => $stateToVisible( $stateBadges ),
+			'honor' => $stateToVisible( $stateHonor ),
 			'vault' => $stateToVisible( $stateVault ),
 			'account_stats' => $stateToVisible( $stateAccountStats ),
 		];
+	}
+
+	/**
+	 * Keep Pixel Quest profile suggestions after normal wiki titles; append index matches.
+	 *
+	 * @param array<int, array<string, mixed>> &$results
+	 */
+	public static function onApiOpenSearchSuggest( array &$results ): void {
+		$req = RequestContext::getMain()->getRequest();
+		$q = trim( (string)$req->getVal( 'search', '' ) );
+		if ( $q !== '' ) {
+			$dbr = MediaWikiServices::getInstance()->getDBLoadBalancer()->getConnection( DB_REPLICA );
+			if ( !$dbr->tableExists( 'pq_roblox_player_index', __METHOD__ ) ) {
+				self::sortPqProfileSpecialsLast( $results );
+				return;
+			}
+			$index = new PqRobloxPlayerIndexStore();
+			$matches = [];
+			if ( preg_match( '/^\d+$/', $q ) ) {
+				$matches = array_merge( $matches, $index->searchRobloxIdsByPrefix( $q, 5 ) );
+			}
+			$matches = array_merge( $matches, $index->searchPrefix( $q, 8 ) );
+			$dedup = [];
+			$seenRid = [];
+			foreach ( $matches as $m ) {
+				$rid = (int)$m['robloxUserId'];
+				if ( isset( $seenRid[$rid] ) ) {
+					continue;
+				}
+				$seenRid[$rid] = true;
+				$dedup[] = $m;
+			}
+			$matches = $dedup;
+			$seen = [];
+			foreach ( $results as $r ) {
+				$t = $r['title'] ?? null;
+				if ( $t instanceof Title ) {
+					$seen[$t->getPrefixedDBkey()] = true;
+				}
+			}
+			foreach ( $matches as $m ) {
+				$rid = (int)$m['robloxUserId'];
+				$name = str_replace( ' ', '_', $m['username_display'] );
+				$t = Title::makeTitle( \NS_SPECIAL, 'PQProfile/' . $name );
+				$key = $t->getPrefixedDBkey();
+				if ( isset( $seen[$key] ) ) {
+					continue;
+				}
+				$seen[$key] = true;
+				$results[] = [
+					'title' => $t,
+					'redirect from' => null,
+					'extract' => 'Pixel Quest profile — ' . $m['username_display'] . ' (' . $rid . ')',
+					'extract trimmed' => false,
+					'image' => [],
+					'url' => $t->getFullURL(),
+				];
+			}
+		}
+		self::sortPqProfileSpecialsLast( $results );
+	}
+
+	/**
+	 * @param array<int, array<string, mixed>> &$results
+	 */
+	private static function sortPqProfileSpecialsLast( array &$results ): void {
+		$pq = [];
+		$rest = [];
+		foreach ( $results as $r ) {
+			$t = $r['title'] ?? null;
+			if ( $t instanceof Title && $t->inNamespace( \NS_SPECIAL ) ) {
+				$x = $t->getText();
+				if ( str_starts_with( $x, 'PQProfile/' ) || str_starts_with( $x, 'RobloxProfile/' ) ) {
+					$pq[] = $r;
+					continue;
+				}
+			}
+			$rest[] = $r;
+		}
+		$results = array_merge( $rest, $pq );
 	}
 }

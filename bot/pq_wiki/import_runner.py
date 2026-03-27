@@ -38,9 +38,14 @@ from pq_wiki.drop_sources import build_item_id_to_drop_sources
 from pq_wiki.import_log import get_import_logger
 from pq_wiki.loot_tier_icons import build_drop_tier_icon_parts_map, build_drop_tier_wikitext_map
 from pq_wiki.skin_rarity_icons import build_skin_rarity_wikitext_map
+from pq_wiki.honor_icons import build_honor_icon_wikitext_map
 from pq_wiki.render_pages import (
+    achievement_page_path,
     account_stat_page_path,
+    badge_page_path,
     build_account_stat_wikitext,
+    build_achievement_wikitext,
+    build_badge_wikitext,
     build_entity_wikitext,
     build_item_wikitext,
     build_location_wikitext,
@@ -94,10 +99,25 @@ def _as_int_set(vals: Any) -> set[int]:
     return out
 
 
-def load_overrides() -> dict[str, dict[str, set[int]]]:
-    defaults = {
-        "skip": {"items": set(), "locations": set(), "entities": set(), "skins": set()},
-        "unreleased": {"items": set(), "locations": set(), "entities": set(), "skins": set()},
+def load_overrides() -> dict[str, Any]:
+    defaults: dict[str, Any] = {
+        "skip": {
+            "items": set(),
+            "locations": set(),
+            "entities": set(),
+            "skins": set(),
+            "badges": set(),
+            "achievements": set(),
+        },
+        "unreleased": {
+            "items": set(),
+            "locations": set(),
+            "entities": set(),
+            "skins": set(),
+            "badges": set(),
+            "achievements": set(),
+        },
+        "show_hidden_achievements": set(),
     }
     if not WIKI_OVERRIDES_PATH.exists():
         return defaults
@@ -109,14 +129,16 @@ def load_overrides() -> dict[str, dict[str, set[int]]]:
         block = raw.get(section) if isinstance(raw, dict) else None
         if not isinstance(block, dict):
             continue
-        for kind in ("items", "locations", "entities", "skins"):
+        for kind in ("items", "locations", "entities", "skins", "badges", "achievements"):
             defaults[section][kind] = _as_int_set(block.get(kind))
+    if isinstance(raw, dict) and "show_hidden_achievements" in raw:
+        defaults["show_hidden_achievements"] = _as_int_set(raw.get("show_hidden_achievements"))
     return defaults
 
 
 def _warn_missing_layout_templates(site: pywikibot.Site, log) -> None:
     """If layout templates are missing, item pages show raw {{PQ Item|...}} instead of rendering."""
-    for short in ("PQ Item", "PQ Entity", "PQ Location", "PQ Skin"):
+    for short in ("PQ Item", "PQ Entity", "PQ Location", "PQ Skin", "PQ Badge", "PQ Achievement"):
         title = f"Template:{short}"
         p = pywikibot.Page(site, title)
         try:
@@ -190,10 +212,15 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
     skip_locations = overrides["skip"]["locations"]
     skip_entities = overrides["skip"]["entities"]
     skip_skins = overrides["skip"]["skins"]
+    skip_badges = overrides["skip"]["badges"]
+    skip_achievements = overrides["skip"]["achievements"]
     unreleased_items = overrides["unreleased"]["items"]
     unreleased_locations = overrides["unreleased"]["locations"]
     unreleased_entities = overrides["unreleased"]["entities"]
     unreleased_skins = overrides["unreleased"]["skins"]
+    unreleased_badges = overrides["unreleased"]["badges"]
+    unreleased_achievements = overrides["unreleased"]["achievements"]
+    show_hidden_achievements = overrides.get("show_hidden_achievements") or set()
 
     items = [it for it in items if int(it.get("Id", -1)) not in skip_items]
     locations = [loc for loc in locations if int(loc.get("Id", -1)) not in skip_locations]
@@ -205,17 +232,50 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
     character_skins = data.get("CharacterSkins") or []
     character_skins = [s for s in character_skins if int(s.get("Id", -1)) not in skip_skins]
 
+    badges_raw = data.get("Badges") or []
+    if not isinstance(badges_raw, list):
+        badges_raw = []
+    badges = [b for b in badges_raw if isinstance(b, dict) and int(b.get("Id", -1)) not in skip_badges]
+
+    achievements_raw = data.get("Achievements") or []
+    if not isinstance(achievements_raw, list):
+        achievements_raw = []
+    achievements: list[dict[str, Any]] = []
+    for a in achievements_raw:
+        if not isinstance(a, dict):
+            continue
+        aid = int(a.get("Id", -1))
+        if aid in skip_achievements:
+            continue
+        hid = bool(a.get("IsHidden") or a.get("isHidden"))
+        if hid and aid not in show_hidden_achievements:
+            continue
+        achievements.append(a)
+
+    achievement_categories = data.get("AchievementCategories")
+    achievement_series = data.get("AchievementSeries")
+    if not isinstance(achievement_categories, dict):
+        achievement_categories = None
+    if not isinstance(achievement_series, dict):
+        achievement_series = None
+
     log.info(
-        "Overrides loaded: skip(items=%d,locations=%d,entities=%d,skins=%d) "
-        "unreleased(items=%d,locations=%d,entities=%d,skins=%d)",
+        "Overrides loaded: skip(items=%d,locations=%d,entities=%d,skins=%d,badges=%d,achievements=%d) "
+        "unreleased(items=%d,locations=%d,entities=%d,skins=%d,badges=%d,achievements=%d) "
+        "show_hidden_achievements=%d",
         len(skip_items),
         len(skip_locations),
         len(skip_entities),
         len(skip_skins),
+        len(skip_badges),
+        len(skip_achievements),
         len(unreleased_items),
         len(unreleased_locations),
         len(unreleased_entities),
         len(unreleased_skins),
+        len(unreleased_badges),
+        len(unreleased_achievements),
+        len(show_hidden_achievements),
     )
 
     stat_icons = build_stat_icon_wikitext_map(site, data, version)
@@ -224,6 +284,8 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
     log.info("Status effect icons ready: %d", len(status_effect_icons))
     valor_icon_wikitext = build_valor_icon_wikitext(site, data, version)
     log.info("Valor icon ready: %s", bool(valor_icon_wikitext))
+    honor_icon_map = build_honor_icon_wikitext_map(site, data, version)
+    log.info("Honor icons ready: %d", len(honor_icon_map))
     drop_tiers = {int((it.get("DropTierType") or 0)) for it in items}
     if character_skins:
         # Skin drops group as tier 6 (other legendaries); ensure icons exist even if no item uses 6.
@@ -243,6 +305,8 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
     entities_to_process = all_entities[:nlim] if nlim else all_entities
     skins_to_process = character_skins[:nlim] if nlim else character_skins
     account_stats_to_process = account_stats[:nlim] if nlim else account_stats
+    badges_to_process = badges[:nlim] if nlim else badges
+    achievements_to_process = achievements[:nlim] if nlim else achievements
 
     if nlim:
         log.info(
@@ -359,12 +423,35 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
         base = account_stat_page_path(st, used_paths_public)
         account_stat_id_to_path[sid] = base
 
+    badge_id_to_path: dict[int, str] = {}
+    for b in sorted(badges, key=lambda x: int(x["Id"])):
+        bid = int(b["Id"])
+        is_unreleased = bid in unreleased_badges
+        used = used_paths_unreleased if is_unreleased else used_paths_public
+        base = badge_page_path(b, used)
+        badge_id_to_path[bid] = _with_unreleased_namespace(base, is_unreleased)
+
+    achievement_id_to_path: dict[int, str] = {}
+    for ach in sorted(achievements, key=lambda x: int(x["Id"])):
+        aid = int(ach["Id"])
+        is_unreleased = aid in unreleased_achievements
+        used = used_paths_unreleased if is_unreleased else used_paths_public
+        base = achievement_page_path(ach, used)
+        achievement_id_to_path[aid] = _with_unreleased_namespace(base, is_unreleased)
+
+    badges_for_diff = [b for b in badges_raw if isinstance(b, dict) and int(b.get("Id", 0)) >= 0]
+    achievements_for_diff = [
+        a for a in achievements_raw if isinstance(a, dict) and int(a.get("Id", 0)) >= 0
+    ]
+
     old_cached = load_cached_datadump()
     last_state = read_last_import_state() or {}
     ci: set[int] = set()
     cl: set[int] = set()
     ce: set[int] = set()
     cs: set[int] = set()
+    cb: set[int] = set()
+    ca: set[int] = set()
     import_full = (
         old_cached is None
         or last_state.get("render_fingerprint") != render_fp
@@ -376,22 +463,26 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
             "Full wiki rebuild (no/partial cache, render fingerprint changed, PQ_IMPORT_FULL, or --force)",
         )
     else:
-        ci, cl, ce, cs = compute_incremental_sets(
+        ci, cl, ce, cs, cb, ca = compute_incremental_sets(
             old_data=old_cached,
             new_items=items,
             new_locations=locations,
             new_game_objects=game_objects,
             new_character_skins=character_skins,
+            new_badges=badges_for_diff,
+            new_achievements=achievements_for_diff,
             unreleased_entities=unreleased_entities,
         )
         log.info(
-            "Incremental scope: %d items, %d locations, %d entities, %d skins with data changes",
+            "Incremental scope: %d items, %d locations, %d entities, %d skins, %d badges, %d achievements with data changes",
             len(ci),
             len(cl),
             len(ce),
             len(cs),
+            len(cb),
+            len(ca),
         )
-        if not ci and not cl and not ce and not cs:
+        if not ci and not cl and not ce and not cs and not cb and not ca:
             log.info("Incremental diff: no page updates needed (wikitext would be unchanged)")
 
     stats: dict[str, int] = {}
@@ -411,6 +502,8 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
     skins_work = _work_list(skins_to_process, cs)
     # Keep account stats fully refreshed; list is small and currently outside incremental diff sets.
     account_stats_work = account_stats_to_process
+    badges_work = _work_list(badges_to_process, cb)
+    achievements_work = _work_list(achievements_to_process, ca)
 
     def _one(
         kind: str,
@@ -606,6 +699,66 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
             build_account_stat,
             save_account_stat,
             progress=f"{idx}/{n_account_stats}",
+        )
+
+    n_badges = len(badges_work)
+    for idx, bd in enumerate(badges_work, start=1):
+        path = badge_id_to_path[int(bd["Id"])]
+
+        def build_badge(b=bd):
+            return build_badge_wikitext(
+                site,
+                b,
+                version,
+                unreleased=int(b["Id"]) in unreleased_badges,
+            )
+
+        def save_badge(s, ttl, txt, ver, user, k):
+            return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=FORCE_OVERWRITE)
+
+        _one(
+            "badge",
+            path,
+            build_badge,
+            save_badge,
+            progress=f"{idx}/{n_badges}",
+        )
+
+    n_ach = len(achievements_work)
+    for idx, ach in enumerate(achievements_work, start=1):
+        path = achievement_id_to_path[int(ach["Id"])]
+        wiki_hidden = bool(ach.get("IsHidden") or ach.get("isHidden"))
+
+        def build_ach(a=ach, wh=wiki_hidden):
+            return build_achievement_wikitext(
+                site,
+                a,
+                data,
+                version,
+                item_id_to_path=item_id_to_path,
+                item_id_to_item=item_id_to_item,
+                item_name_to_id=item_name_to_id,
+                items_list=items,
+                stat_icons=stat_icons,
+                valor_icon_wikitext=valor_icon_wikitext,
+                honor_icon_map=honor_icon_map,
+                location_id_to_path=location_id_to_path,
+                location_name_to_path=location_name_to_path,
+                achievement_categories=achievement_categories,
+                achievement_series=achievement_series,
+                wiki_hidden=wh,
+                unreleased=int(a["Id"]) in unreleased_achievements,
+            )
+
+        def save_ach(s, ttl, txt, ver, user, k):
+            return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=FORCE_OVERWRITE)
+
+        _one(
+            "achievement",
+            path,
+            build_ach,
+            save_ach,
+            progress=f"{idx}/{n_ach}",
         )
 
     if not errors:

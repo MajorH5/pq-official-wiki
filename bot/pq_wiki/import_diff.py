@@ -38,8 +38,14 @@ _RENDER_CODE_PATHS: tuple[Path, ...] = (
     BOT_ROOT / "pq_wiki" / "renderers" / "entity_renderer.py",
     BOT_ROOT / "pq_wiki" / "renderers" / "location_renderer.py",
     BOT_ROOT / "pq_wiki" / "renderers" / "skin_renderer.py",
+    BOT_ROOT / "pq_wiki" / "renderers" / "badge_renderer.py",
+    BOT_ROOT / "pq_wiki" / "renderers" / "achievement_renderer.py",
     BOT_ROOT / "pq_wiki" / "renderers" / "shared.py",
     BOT_ROOT / "pq_wiki" / "wikitext_util.py",
+    BOT_ROOT / "pq_wiki" / "reward_wikitext.py",
+    BOT_ROOT / "pq_wiki" / "datadump_helpers.py",
+    BOT_ROOT / "pq_wiki" / "honor_icons.py",
+    BOT_ROOT / "pq_wiki" / "achievement_icons.py",
     BOT_ROOT / "pq_wiki" / "seo.py",
     BOT_ROOT / "pq_wiki" / "drop_sources.py",
     BOT_ROOT / "pq_wiki" / "skin_drops.py",
@@ -54,6 +60,8 @@ _TEMPLATE_NAMES: tuple[str, ...] = (
     "PQ_Entity.wikitext",
     "PQ_Location.wikitext",
     "PQ_Skin.wikitext",
+    "PQ_Badge.wikitext",
+    "PQ_Achievement.wikitext",
 )
 
 
@@ -199,6 +207,40 @@ def diff_item_ids(
     return changed
 
 
+def diff_badge_ids(
+    old_data: dict[str, Any],
+    new_badges: list[dict[str, Any]],
+) -> set[int]:
+    old_b = old_data.get("Badges") or []
+    new_idx = _index_by_id(new_badges)
+    old_idx = _index_by_id(list(old_b))
+    changed: set[int] = set()
+    for bid, row in new_idx.items():
+        if bid not in old_idx:
+            changed.add(bid)
+            continue
+        if _object_hash(row) != _object_hash(old_idx[bid]):
+            changed.add(bid)
+    return changed
+
+
+def diff_achievement_ids(
+    old_data: dict[str, Any],
+    new_achievements: list[dict[str, Any]],
+) -> set[int]:
+    old_a = old_data.get("Achievements") or []
+    new_idx = _index_by_id(new_achievements)
+    old_idx = _index_by_id(list(old_a))
+    changed: set[int] = set()
+    for aid, row in new_idx.items():
+        if aid not in old_idx:
+            changed.add(aid)
+            continue
+        if _object_hash(row) != _object_hash(old_idx[aid]):
+            changed.add(aid)
+    return changed
+
+
 def diff_skin_ids(
     old_data: dict[str, Any],
     new_skins: list[dict[str, Any]],
@@ -316,9 +358,11 @@ def compute_incremental_sets(
     new_locations: list[dict[str, Any]],
     new_game_objects: list[dict[str, Any]],
     new_character_skins: list[dict[str, Any]],
+    new_badges: list[dict[str, Any]],
+    new_achievements: list[dict[str, Any]],
     unreleased_entities: set[int],
-) -> tuple[set[int], set[int], set[int], set[int]]:
-    """Returns (changed_item_ids, changed_location_ids, changed_entity_ids, changed_skin_ids)."""
+) -> tuple[set[int], set[int], set[int], set[int], set[int], set[int]]:
+    """Returns changed ids: items, locations, entities, skins, badges, achievements."""
     ci = diff_item_ids(
         old_data,
         new_items,
@@ -328,4 +372,6 @@ def compute_incremental_sets(
     cl = diff_location_ids(old_data, new_locations)
     ce = diff_entity_ids(old_data, new_game_objects, new_locations)
     cs = diff_skin_ids(old_data, new_character_skins)
-    return ci, cl, ce, cs
+    cb = diff_badge_ids(old_data, new_badges)
+    ca = diff_achievement_ids(old_data, new_achievements)
+    return ci, cl, ce, cs, cb, ca

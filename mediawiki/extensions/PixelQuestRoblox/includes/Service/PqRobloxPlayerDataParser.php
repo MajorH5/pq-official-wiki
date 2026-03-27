@@ -277,4 +277,72 @@ final class PqRobloxPlayerDataParser {
 		}
 		return null;
 	}
+
+	/**
+	 * Account-owned badge ids (no quantities). Root key "badges".
+	 *
+	 * @return int[]
+	 */
+	public static function getOwnedBadgeIds( array $root ): array {
+		$b = $root['badges'] ?? $root['Badges'] ?? null;
+		if ( !is_array( $b ) ) {
+			return [];
+		}
+		$out = [];
+		foreach ( $b as $v ) {
+			if ( is_numeric( $v ) ) {
+				$i = (int)$v;
+				if ( $i > 0 ) {
+					$out[] = $i;
+				}
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * Equipped badge on a character (0 = none).
+	 */
+	public static function getEquippedBadgeIdForCharacter( array $char ): int {
+		foreach ( [ 'equippedPlayerBadge', 'EquippedPlayerBadge' ] as $k ) {
+			if ( array_key_exists( $k, $char ) && is_numeric( $char[$k] ) ) {
+				return (int)$char[$k];
+			}
+		}
+		return 0;
+	}
+
+	/**
+	 * Completed achievement ids from Data.progressTrackers.achievements.completed
+	 *
+	 * @return int[]
+	 */
+	public static function getCompletedAchievementIds( array $root ): array {
+		$data = $root['Data'] ?? $root['data'] ?? null;
+		if ( !is_array( $data ) ) {
+			return [];
+		}
+		$pt = $data['progressTrackers'] ?? $data['ProgressTrackers'] ?? null;
+		if ( !is_array( $pt ) ) {
+			return [];
+		}
+		$ach = $pt['achievements'] ?? $pt['Achievements'] ?? null;
+		if ( !is_array( $ach ) ) {
+			return [];
+		}
+		$done = $ach['completed'] ?? $ach['Completed'] ?? null;
+		if ( !is_array( $done ) ) {
+			return [];
+		}
+		$out = [];
+		foreach ( $done as $v ) {
+			if ( is_numeric( $v ) ) {
+				$i = (int)$v;
+				if ( $i > 0 ) {
+					$out[] = $i;
+				}
+			}
+		}
+		return $out;
+	}
 }

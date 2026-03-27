@@ -129,3 +129,17 @@ def location_screenshot_base(location_slug: str, index: int) -> str:
 
 def game_object_sprite_base(go_id: int, name: str) -> str:
     return sanitize_base(f"go_{slug(name)}_{go_id}")
+
+
+def badge_sprite_base(badge_id: int, name: str) -> str:
+    return sanitize_base(f"badge_{slug(name)}_{badge_id}")
+
+
+def honor_icon_base(display_name: str) -> str:
+    """Uploaded crown file: honor_<slug(display_name)>.png — matches wiki convention."""
+    return sanitize_base(f"honor_{slug(display_name)}")
+
+
+def achievement_icon_base(category_label: str, sequence_number: int) -> str:
+    """One sheet cell per category + sequence (see achievement_icons.py)."""
+    return sanitize_base(f"achievement_{slug(category_label)}_{sequence_number}")

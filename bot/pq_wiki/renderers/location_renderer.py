@@ -19,6 +19,45 @@ from pq_wiki.wikitext_util import fmt_num, template_invocation, wikitable
 # Wikimedia Commons placeholder (InstantCommons / local mirror); replace when datadump ships assets.
 _COMMONS_PLACEHOLDER_FILE = "No image available-4x.png"
 
+# Optional OST when datadump has no field yet: set a full YouTube URL to show the embed (or use OstYoutubeUrl on the location).
+_DEFAULT_OST_YOUTUBE_URL = ""
+
+
+def _youtube_video_id(url: str) -> str | None:
+    u = (url or "").strip()
+    if not u:
+        return None
+    if "youtu.be/" in u:
+        return u.split("youtu.be/")[-1].split("?")[0].split("/")[0] or None
+    if "v=" in u:
+        return u.split("v=")[-1].split("&")[0] or None
+    if "/embed/" in u:
+        return u.split("/embed/")[-1].split("?")[0] or None
+    return None
+
+
+def _ost_embed_block(location_name: str, youtube_url: str | None) -> str:
+    """Right-floated iframe + caption; empty when no URL."""
+    raw = (youtube_url or "").strip() or _DEFAULT_OST_YOUTUBE_URL.strip()
+    if not raw:
+        return ""
+    vid = _youtube_video_id(raw)
+    if not vid:
+        return ""
+    cap = (
+        f"'''{location_name} - Pixel Quest! OST composed by "
+        f"[https://x.com/coffvshop coffvshop]'''"
+    )
+    return (
+        '<div style="float:right; clear:right; margin:0 0 1em 1em; border:1px solid #c8ccd1; '
+        'padding:6px; max-width:360px;">'
+        f'<iframe width="320" height="180" src="https://www.youtube.com/embed/{vid}" '
+        'title="OST" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" '
+        'referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>'
+        f'<div style="font-size:85%; margin-top:6px;">{cap}</div>'
+        "</div>"
+    )
+
 
 def build_location_wikitext(
     site: pywikibot.Site,
@@ -98,7 +137,15 @@ def build_location_wikitext(
     cat_lines = ["[[Category:Locations]]"]
     if unreleased:
         cat_lines.append("[[Category:Unreleased]]")
+    if loc.get("IsTypicalDungeon"):
+        cat_lines.append("[[Category:Dungeon]]")
+        dcat = _location_difficulty_int(loc.get("Difficulty"))
+        if dcat > 0:
+            cat_lines.append(f"[[Category:Dungeon Difficulty {dcat}]]")
     categories_block = "\n".join(cat_lines)
+
+    ost_url = loc.get("OstYoutubeUrl") or loc.get("OstYouTube") or loc.get("ostYoutubeUrl")
+    ost_block = _ost_embed_block(str(name), str(ost_url) if ost_url else None)
 
     body = template_invocation(
         "PQ Location",
@@ -111,6 +158,7 @@ def build_location_wikitext(
             ("found_entities", found_entities_block),
             ("dropped_from", dropped_from_block),
             ("categories", categories_block),
+            ("ost_embed", ost_block),
         ],
     )
     seo = wiki_seo_block(

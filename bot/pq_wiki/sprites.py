@@ -199,22 +199,48 @@ def normalize_gif_bytes_for_imagemagick(data: bytes) -> bytes:
         return data
 
 
+def _frame_size_mult(frame_sizes: Any, index: int) -> tuple[int, int]:
+    """
+    CharacterSkin animations may set FrameSizes: index -> [wMul, hMul] in grid cells
+    (e.g. [2, 1] = crop 2× base width × 1× base height). Missing entry defaults to (1, 1).
+    """
+    if not frame_sizes:
+        return (1, 1)
+    raw = None
+    if isinstance(frame_sizes, dict):
+        raw = frame_sizes.get(str(index))
+        if raw is None:
+            raw = frame_sizes.get(index)
+    elif isinstance(frame_sizes, list) and index < len(frame_sizes):
+        raw = frame_sizes[index]
+    if isinstance(raw, (list, tuple)) and len(raw) >= 2:
+        try:
+            return (max(1, int(raw[0])), max(1, int(raw[1])))
+        except (TypeError, ValueError):
+            pass
+    return (1, 1)
+
+
 def animation_frames_rgba(animation: dict, sheet: Image.Image) -> list[Image.Image]:
-    """Crop each cell from a sheet using Roblox-style Size / Base / Frames."""
-    size = animation.get("Size") or {}
+    """Crop each cell from a sheet using Roblox-style Size / ImageRectSize / Base / Frames / FrameSizes."""
+    size = animation.get("Size") or animation.get("ImageRectSize") or animation.get("imageRectSize") or {}
     base = animation.get("Base") or {}
     fw = int(_g(size, "X", "x", default=1))
     fh = int(_g(size, "Y", "y", default=1))
     bx, by = normalize_xy(base)
     frames_spec = animation.get("Frames") or []
+    frame_sizes = animation.get("FrameSizes") or animation.get("frameSizes")
     frames: list[Image.Image] = []
-    for cell in frames_spec:
+    for i, cell in enumerate(frames_spec):
         if not isinstance(cell, (list, tuple)) or len(cell) < 2:
             continue
         col, row = int(cell[0]), int(cell[1])
+        mw, mh = _frame_size_mult(frame_sizes, i)
+        cw = fw * mw
+        ch = fh * mh
         left = bx + col * fw
         top = by + row * fh
-        frames.append(_crop_sheet(sheet, left, top, fw, fh).convert("RGBA"))
+        frames.append(_crop_sheet(sheet, left, top, cw, ch).convert("RGBA"))
     return frames
 
 
@@ -230,6 +256,24 @@ def _animation_duration_ms(
     return max(20, int(1000 / fps)) if fps > 0 else 100
 
 
+def _pad_frames_to_max_canvas(frames: list[Image.Image]) -> list[Image.Image]:
+    """Top-left aligned; canvas is max(w)×max(h) so wide scaled frames are not stretched."""
+    if not frames:
+        return frames
+    max_w = max(fr.size[0] for fr in frames)
+    max_h = max(fr.size[1] for fr in frames)
+    out: list[Image.Image] = []
+    for fr in frames:
+        w, h = fr.size
+        if w == max_w and h == max_h:
+            out.append(fr)
+            continue
+        canvas = Image.new("RGBA", (max_w, max_h), (0, 0, 0, 0))
+        canvas.paste(fr, (0, 0), fr)
+        out.append(canvas)
+    return out
+
+
 def render_animation_to_gif_bytes(
     animation: dict,
     sheet: Image.Image,
@@ -239,6 +283,7 @@ def render_animation_to_gif_bytes(
     frames = animation_frames_rgba(animation, sheet)
     if not frames:
         raise ValueError("No frames in animation")
+    frames = _pad_frames_to_max_canvas(frames)
     duration_ms = _animation_duration_ms(animation, fps_scale=fps_scale, fps_override=fps_override)
     return _rgba_frames_to_transparent_gif(frames, duration_ms)
 

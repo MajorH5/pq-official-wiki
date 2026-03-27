@@ -1,0 +1,10 @@
+<noinclude>
+'''Badge layout''' — transcluded by badge pages. Bot fills named parameters.
+</noinclude>
+'''{{{name|}}}'''
+
+{{{sprite|}}}
+
+{{{desc|}}}
+
+{{{categories|}}}
