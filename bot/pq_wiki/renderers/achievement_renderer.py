@@ -126,13 +126,12 @@ def build_achievement_wikitext(
     if series_id != -1:
         details_rows.append(("Series", achievement_series_label(series_id, achievement_series)))
         details_rows.append(("Sequence", str(seq)))
-    details_rows.extend(
-        [
-            ("Group", str(int(ach.get("Group") or 0))),
-            ("Sub-group", str(int(ach.get("SubGroup") or 0))),
-            ("Classification", str(int(ach.get("Classification") or 0))),
-        ]
-    )
+    if group_id != -1:
+        details_rows.append(("Group", str(group_id)))
+    if subgroup_id != -1:
+        details_rows.append(("Sub-group", str(subgroup_id)))
+    if class_id != -1:
+        details_rows.append(("Classification", str(class_id)))
     from pq_wiki.wikitext_util import wikitable
 
     details_block = wikitable(details_rows)
