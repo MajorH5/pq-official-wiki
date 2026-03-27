@@ -1,0 +1,14 @@
+/**
+ * Badge sprite size (matches in-game 20×20). Use class pq-roblox-badge-ico on wiki images
+ * (e.g. infobox) so badge articles match the profile badges tab.
+ */
+img.pq-roblox-badge-ico {
+	width: 20px;
+	height: 20px;
+	max-width: 20px;
+	max-height: 20px;
+	vertical-align: middle;
+	image-rendering: pixelated;
+	image-rendering: -moz-crisp-edges;
+	image-rendering: crisp-edges;
+}

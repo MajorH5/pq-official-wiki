@@ -20,7 +20,7 @@ if [[ -z "$TOKEN" ]]; then
   exit 1
 fi
 
-BODY="action=pqrobloxindexplayer&format=json&userid=${ROBLOX_USER_ID}"
+BODY="action=pqrobloxindexplayer&format=json&formatversion=2&userid=${ROBLOX_USER_ID}"
 if [[ $# -ge 2 ]]; then
   BODY+="&username=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$2'))" 2>/dev/null || printf '%s' "$2")"
 fi

@@ -6,6 +6,7 @@ import pywikibot
 
 from pq_wiki.achievement_icons import upload_achievement_icon
 from pq_wiki.datadump_helpers import (
+    achievement_category_id,
     achievement_category_label,
     achievement_series_label,
     find_item_id_by_name,
@@ -51,10 +52,23 @@ def build_achievement_wikitext(
     desc = html_to_wikitext(str(ach.get("Description") or ""))
     desc_block = f"''{desc}''" if desc else ""
 
-    cat_num = int(ach.get("Category") or 0)
+    cat_num = achievement_category_id(ach.get("Category"), achievement_categories)
     cat_label = achievement_category_label(cat_num, achievement_categories)
     seq = int(ach.get("SequenceNumber") or 0)
-    series_id = int(ach.get("SeriesId") if ach.get("SeriesId") is not None else -1)
+
+    def _ach_int(key: str, default: int = -1) -> int:
+        raw = ach.get(key)
+        if raw is None:
+            return default
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return default
+
+    series_id = _ach_int("SeriesId")
+    group_id = _ach_int("Group")
+    subgroup_id = _ach_int("SubGroup")
+    class_id = _ach_int("Classification")
 
     icon_w = upload_achievement_icon(
         site,
@@ -83,7 +97,7 @@ def build_achievement_wikitext(
 
     rewards_block = ""
     if isinstance(rewards_raw, list) and rewards_raw:
-        rewards_block = render_rewards_wikitable(
+        table = render_rewards_wikitable(
             [r for r in rewards_raw if isinstance(r, dict)],
             item_id_to_path=item_id_to_path,
             item_id_to_item=item_id_to_item,
@@ -96,6 +110,7 @@ def build_achievement_wikitext(
             location_id_to_path=location_id_to_path,
             location_name_to_path=location_name_to_path,
         )
+        rewards_block = f"== Rewards ==\n\n{table}"
 
     meta = _norm_metadata(ach.get("Metadata"))
     meta_block = render_metadata_section(
@@ -127,6 +142,15 @@ def build_achievement_wikitext(
         tag_hidden = "''This achievement is hidden in-game; it is shown on the wiki by override.''"
 
     cat_lines = ["[[Category:Achievements]]", f"[[Category:{cat_label} achievements]]"]
+    if series_id != -1 and group_id != -1:
+        series_title = achievement_series_label(series_id, achievement_series)
+        cat_lines.append(f"[[Category:{series_title} Achievements]]")
+    if group_id != -1:
+        cat_lines.append(f"[[Category:Group {group_id} achievements]]")
+    if subgroup_id != -1:
+        cat_lines.append(f"[[Category:Sub-group {subgroup_id} achievements]]")
+    if class_id != -1:
+        cat_lines.append(f"[[Category:Classification {class_id} achievements]]")
     if wiki_hidden:
         cat_lines.append("[[Category:Hidden achievements]]")
     if unreleased:
@@ -136,7 +160,6 @@ def build_achievement_wikitext(
     body = template_invocation(
         "PQ Achievement",
         [
-            ("name", name),
             ("tag_hidden", tag_hidden),
             ("icon", icon_w),
             ("desc", desc_block),
@@ -144,7 +167,6 @@ def build_achievement_wikitext(
             ("rewards", rewards_block),
             ("categories", categories_block),
         ],
-        always_emit_keys=frozenset({"name"}),
     )
     desc_plain = plain_text_for_seo(desc)
     seo_desc = (

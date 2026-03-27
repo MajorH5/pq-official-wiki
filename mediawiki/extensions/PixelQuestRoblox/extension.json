@@ -17,6 +17,7 @@
 		"GetPreferences": "PixelQuestRoblox\\Hooks::onGetPreferences",
 		"UserGetDefaultOptions": "PixelQuestRoblox\\Hooks::onUserGetDefaultOptions",
 		"OutputPageBeforeHTML": "PixelQuestRoblox\\Hooks::onOutputPageBeforeHTML",
+		"BeforePageDisplay": "PixelQuestRoblox\\Hooks::onBeforePageDisplay",
 		"ApiOpenSearchSuggest": "PixelQuestRoblox\\Hooks::onApiOpenSearchSuggest"
 	},
 	"SpecialPages": {
@@ -38,6 +39,9 @@
 		"ext.pqroblox.profile": {
 			"styles": "resources/ext.pqroblox.profile.css",
 			"scripts": "resources/ext.pqroblox.profile.js"
+		},
+		"ext.pqroblox.badge": {
+			"styles": "resources/ext.pqroblox.badge.css"
 		}
 	},
 	"ResourceFileModulePaths": {

@@ -1,11 +1,6 @@
 <noinclude>
 '''Achievement layout''' — transcluded by achievement pages. Bot fills named parameters.
-</noinclude>
-'''{{{name|}}}'''
-
-{{{tag_hidden|}}}
-
-{{{icon|}}}
+</noinclude>{{#if:{{{tag_hidden|}}}|{{{tag_hidden|}}}<br>|}}{{{icon|}}}
 
 {{{desc|}}}
 

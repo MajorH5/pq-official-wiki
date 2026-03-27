@@ -56,6 +56,14 @@
 	margin: 0.15em 0 0.5em;
 }
 
+.pq-roblox-account-level {
+	margin: 0.15em 0 0.5em;
+}
+
+.pq-roblox-account-honor {
+	margin: 0.15em 0 0.5em;
+}
+
 .pq-roblox-last-seen {
 	margin: 0.15em 0 0.5em;
 }
@@ -108,13 +116,18 @@
 .pq-roblox-characters .pq-roblox-col-name {
 	width: 11em;
 	max-width: 14em;
-	text-align: left !important;
+	text-align: center !important;
 }
 
-.pq-roblox-characters .pq-roblox-col-lvl,
-.pq-roblox-characters .pq-roblox-col-valor {
+.pq-roblox-characters .pq-roblox-col-lvl {
 	width: 3.25em;
 	max-width: 4.5em;
+}
+
+.pq-roblox-characters .pq-roblox-col-valor {
+	min-width: 4.75em;
+	width: 5.5em;
+	max-width: 8em;
 }
 
 .pq-roblox-characters .pq-roblox-col-eq {
@@ -152,7 +165,7 @@
 .pq-roblox-name-cell {
 	display: flex;
 	align-items: center;
-	justify-content: flex-start;
+	justify-content: center;
 	flex-wrap: wrap;
 	gap: 0.3em;
 }
@@ -353,6 +366,40 @@
 	grid-template-columns: repeat(auto-fill, minmax(44px, 44px));
 	gap: 4px;
 	margin: 0.35em 0 0;
+}
+
+/* Badges tab: 20×20 sprites in 40×40 cells (aligns with skin grid slot size) */
+.pq-roblox-badge-grid {
+	grid-template-columns: repeat(auto-fill, minmax(40px, 40px));
+}
+
+.pq-roblox-badge-grid .pq-roblox-inv-slot {
+	width: 40px;
+	height: 40px;
+	min-width: 40px;
+	min-height: 40px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.pq-roblox-badge-grid .pq-roblox-inv-slot a {
+	line-height: 0;
+}
+
+.pq-roblox-badge-grid .pq-roblox-badge-ico {
+	width: 20px;
+	height: 20px;
+	max-width: 20px;
+	max-height: 20px;
+}
+
+/* Character table: equipped badge icon */
+.pq-roblox-characters .pq-roblox-badge-ico {
+	width: 20px;
+	height: 20px;
+	max-width: 20px;
+	max-height: 20px;
 }
 
 .pq-roblox-skin-cell {

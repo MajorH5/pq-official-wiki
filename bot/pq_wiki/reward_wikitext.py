@@ -111,18 +111,16 @@ def format_reward_cell_wikitext(
             parts.append(f"Luck in '''{dungeon}''': {pct}")
 
     elif rtype == "MasteryBoost":
-        wclass = str(reward.get("WeaponClass") or "")
+        wclass = str(reward.get("WeaponClass") or "").strip()
         val = reward.get("Value")
         pct = _pct_from_fraction(float(val)) if val is not None else ""
+        label = f"Mastery {pct} {wclass} damage".strip() if wclass else f"Mastery {pct} damage"
         if mastery_weapon_item:
             mid = int(mastery_weapon_item["Id"])
             base = item_sprite_base(mid, str(mastery_weapon_item.get("Name") or f"Item {mid}"))
-            parts.append(
-                file_wikitext(f"{base}.png", thumb_px)
-                + f" {wclass} mastery: {pct} damage"
-            )
+            parts.append(file_wikitext(f"{base}.png", thumb_px) + f" {label}")
         else:
-            parts.append(f"{wclass} mastery: {pct} damage")
+            parts.append(label)
 
     elif rtype == "HonorBoost":
         val = reward.get("Value")
@@ -139,6 +137,18 @@ def format_reward_cell_wikitext(
             parts.append(f"{vi} +{val} Valor")
         else:
             parts.append(f"+{val} Valor")
+
+    elif rtype == "ExperienceBoost":
+        val = reward.get("Value")
+        if val is not None:
+            try:
+                f = float(val)
+                pct = _pct_from_fraction(f)
+                parts.append(_stat_icon_wikitext(stat_icons, "experience", f"{pct} experience"))
+            except (TypeError, ValueError):
+                parts.append(str(val))
+        else:
+            parts.append("Experience boost")
 
     else:
         parts.append(f"'''{rtype}''': {reward.get('Value', '')}")

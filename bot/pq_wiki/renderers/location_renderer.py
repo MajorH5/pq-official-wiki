@@ -36,27 +36,18 @@ def _youtube_video_id(url: str) -> str | None:
     return None
 
 
-def _ost_embed_block(location_name: str, youtube_url: str | None) -> str:
-    """Right-floated iframe + caption; empty when no URL."""
+def _ost_youtube_and_caption(location_name: str, youtube_url: str | None) -> tuple[str, str]:
+    """Video ID (or URL) + caption for Template:PQ Location / Extension:EmbedVideo #ev:youtube."""
     raw = (youtube_url or "").strip() or _DEFAULT_OST_YOUTUBE_URL.strip()
     if not raw:
-        return ""
+        return "", ""
     vid = _youtube_video_id(raw)
-    if not vid:
-        return ""
+    ost = vid or raw
     cap = (
         f"'''{location_name} - Pixel Quest! OST composed by "
         f"[https://x.com/coffvshop coffvshop]'''"
     )
-    return (
-        '<div style="float:right; clear:right; margin:0 0 1em 1em; border:1px solid #c8ccd1; '
-        'padding:6px; max-width:360px;">'
-        f'<iframe width="320" height="180" src="https://www.youtube.com/embed/{vid}" '
-        'title="OST" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" '
-        'referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>'
-        f'<div style="font-size:85%; margin-top:6px;">{cap}</div>'
-        "</div>"
-    )
+    return ost, cap
 
 
 def build_location_wikitext(
@@ -145,7 +136,7 @@ def build_location_wikitext(
     categories_block = "\n".join(cat_lines)
 
     ost_url = loc.get("OstYoutubeUrl") or loc.get("OstYouTube") or loc.get("ostYoutubeUrl")
-    ost_block = _ost_embed_block(str(name), str(ost_url) if ost_url else None)
+    ost_youtube, ost_caption = _ost_youtube_and_caption(str(name), str(ost_url) if ost_url else None)
 
     body = template_invocation(
         "PQ Location",
@@ -153,13 +144,15 @@ def build_location_wikitext(
             ("difficulty", difficulty),
             ("portal_image", portal_image_block),
             ("portal_table", portal_table),
+            ("ost_youtube", ost_youtube),
+            ("ost_caption", ost_caption),
             ("map_section", map_section),
             ("screenshots_section", screenshots_section),
             ("found_entities", found_entities_block),
             ("dropped_from", dropped_from_block),
             ("categories", categories_block),
-            ("ost_embed", ost_block),
         ],
+        always_emit_keys=frozenset({"ost_youtube", "ost_caption"}),
     )
     seo = wiki_seo_block(
         site,

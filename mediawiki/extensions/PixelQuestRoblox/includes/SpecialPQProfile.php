@@ -236,7 +236,7 @@ final class SpecialPQProfile extends SpecialPage {
 				'characters_inventory' => false,
 				'graveyard' => true,
 				'skins' => false,
-				'badges' => true,
+				'badges' => $viewer->isRegistered(),
 				'honor' => true,
 				'vault' => false,
 				'account_stats' => false,
@@ -312,6 +312,10 @@ final class SpecialPQProfile extends SpecialPage {
 		};
 
 		$chars = $stateToVisible( $stateChars );
+		$badgesVisible = $stateToVisible( $stateBadges );
+		if ( !$viewer->isRegistered() && !$isOwner ) {
+			$badgesVisible = false;
+		}
 		return [
 			'valor' => $stateToVisible( $stateValor ),
 			'last_seen' => $stateToVisible( $stateLastSeen ),
@@ -320,7 +324,7 @@ final class SpecialPQProfile extends SpecialPage {
 			'characters_inventory' => $chars && $stateToVisible( $stateCharsInv ),
 			'graveyard' => $stateToVisible( $stateGrave ),
 			'skins' => $stateToVisible( $stateSkins ),
-			'badges' => $stateToVisible( $stateBadges ),
+			'badges' => $badgesVisible,
 			'honor' => $stateToVisible( $stateHonor ),
 			'vault' => $stateToVisible( $stateVault ),
 			'account_stats' => $stateToVisible( $stateAccountStats ),

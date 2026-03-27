@@ -22,7 +22,8 @@ if (-not $Token) {
 }
 
 $Uri = "$Base/api.php"
-$Body = "action=pqrobloxindexplayer&format=json&userid=$RobloxId"
+# formatversion=2: booleans stay true/false in JSON (legacy format=1 uses "" for true).
+$Body = "action=pqrobloxindexplayer&format=json&formatversion=2&userid=$RobloxId"
 if ($args[1]) {
     $u = [uri]::EscapeDataString($args[1])
     $Body += "&username=$u"

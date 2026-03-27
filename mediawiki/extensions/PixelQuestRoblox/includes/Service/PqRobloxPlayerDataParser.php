@@ -301,7 +301,21 @@ final class PqRobloxPlayerDataParser {
 	}
 
 	/**
-	 * Equipped badge on a character (0 = none).
+	 * Account equipped badge (0 = none). Lives on unwrapped save root, not per character.
+	 */
+	public static function getEquippedPlayerBadgeId( array $root ): int {
+		foreach ( [ 'equippedPlayerBadge', 'EquippedPlayerBadge' ] as $k ) {
+			if ( array_key_exists( $k, $root ) && is_numeric( $root[$k] ) ) {
+				$i = (int)$root[$k];
+				return $i > 0 ? $i : 0;
+			}
+		}
+
+		return 0;
+	}
+
+	/**
+	 * Equipped badge on a character (0 = none). Legacy / fallback only; prefer getEquippedPlayerBadgeId().
 	 */
 	public static function getEquippedBadgeIdForCharacter( array $char ): int {
 		foreach ( [ 'equippedPlayerBadge', 'EquippedPlayerBadge' ] as $k ) {
@@ -315,14 +329,19 @@ final class PqRobloxPlayerDataParser {
 	/**
 	 * Completed achievement ids from Data.progressTrackers.achievements.completed
 	 *
+	 * After profile unwrap (PqRobloxDataStoreClient), the save root is often the inner `Data`
+	 * object — progressTrackers live at root, not under a nested `Data` key.
+	 *
 	 * @return int[]
 	 */
 	public static function getCompletedAchievementIds( array $root ): array {
-		$data = $root['Data'] ?? $root['data'] ?? null;
-		if ( !is_array( $data ) ) {
-			return [];
+		$inner = $root;
+		if ( isset( $root['Data'] ) && is_array( $root['Data'] ) ) {
+			$inner = $root['Data'];
+		} elseif ( isset( $root['data'] ) && is_array( $root['data'] ) ) {
+			$inner = $root['data'];
 		}
-		$pt = $data['progressTrackers'] ?? $data['ProgressTrackers'] ?? null;
+		$pt = $inner['progressTrackers'] ?? $inner['ProgressTrackers'] ?? null;
 		if ( !is_array( $pt ) ) {
 			return [];
 		}

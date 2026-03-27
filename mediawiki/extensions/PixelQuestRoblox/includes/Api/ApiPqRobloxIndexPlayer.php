@@ -36,8 +36,9 @@ final class ApiPqRobloxIndexPlayer extends ApiBase {
 		$store = new PqRobloxPlayerIndexStore();
 		$store->upsert( $robloxUserId, $username );
 
+		// Use integer, not boolean: legacy format=json maps true to "" (BC empty-string-as-true).
 		$this->getResult()->addValue( null, 'pqroblox', [
-			'indexed' => true,
+			'indexed' => 1,
 			'robloxUserId' => $robloxUserId,
 		] );
 	}

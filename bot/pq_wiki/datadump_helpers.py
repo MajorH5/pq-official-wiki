@@ -53,12 +53,43 @@ def find_t0_weapon_item_for_class(items: list[dict[str, Any]], weapon_class: str
     return candidates[0]
 
 
+def achievement_category_id(raw: Any, achievement_categories: dict[str, Any] | None) -> int:
+    """Resolve Achievement.Category: int id or enum string (e.g. COMBAT -> 0 via AchievementCategories)."""
+    if raw is None or raw == "":
+        return 0
+    if isinstance(raw, bool):
+        return int(raw)
+    if isinstance(raw, (int, float)):
+        return int(raw)
+    s = str(raw).strip()
+    if s.isdigit() or (s.startswith("-") and s[1:].isdigit()):
+        return int(s)
+    if achievement_categories and isinstance(achievement_categories, dict):
+        if s in achievement_categories:
+            v = achievement_categories[s]
+            try:
+                return int(v)
+            except (TypeError, ValueError):
+                return 0
+        sup = s.upper()
+        for k, v in achievement_categories.items():
+            if str(k).upper() == sup:
+                try:
+                    return int(v)
+                except (TypeError, ValueError):
+                    return 0
+    return 0
+
+
 def achievement_category_label(cat_num: int, achievement_categories: dict[str, Any] | None) -> str:
     """Normalize enum name to display (e.g. COMBAT -> Combat)."""
     if achievement_categories and isinstance(achievement_categories, dict):
         for k, v in achievement_categories.items():
-            if int(v) == int(cat_num):
-                return _normalize_enum_display(str(k))
+            try:
+                if int(v) == int(cat_num):
+                    return _normalize_enum_display(str(k))
+            except (TypeError, ValueError):
+                continue
     return f"Category {cat_num}"
 
 

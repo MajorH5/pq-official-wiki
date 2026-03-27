@@ -6,6 +6,7 @@ use MediaWiki\Context\RequestContext;
 use MediaWiki\Installer\DatabaseUpdater;
 use MediaWiki\MediaWikiServices;
 use MediaWiki\Output\OutputPage;
+use MediaWiki\Skin\Skin;
 use MediaWiki\Title\Title;
 use MediaWiki\User\User;
 use PixelQuestRoblox\Service\PqRobloxDataStoreClient;
@@ -27,10 +28,40 @@ final class Hooks {
 			'pq_roblox_link',
 			"$base/pq_roblox_link.sql"
 		);
+		// If pq_roblox_player_index exists but is the wrong shape (manual / legacy),
+		// addExtensionTable would skip CREATE — drop first so the table matches extension code.
+		$updater->addExtensionUpdate( [
+			[ self::class, 'fixPqRobloxPlayerIndexTable' ],
+		] );
 		$updater->addExtensionTable(
 			'pq_roblox_player_index',
 			"$base/pq_roblox_player_index.sql"
 		);
+	}
+
+	/**
+	 * Drop pq_roblox_player_index when required columns are missing so addExtensionTable can CREATE.
+	 *
+	 * @return bool
+	 */
+	public static function fixPqRobloxPlayerIndexTable( DatabaseUpdater $updater ) {
+		$db = $updater->getDB();
+		if ( !$db->tableExists( 'pq_roblox_player_index', __METHOD__ ) ) {
+			return true;
+		}
+		$required = [ 'roblox_user_id', 'username_normalized', 'username_display', 'updated_at' ];
+		foreach ( $required as $field ) {
+			if ( !$db->fieldExists( 'pq_roblox_player_index', $field, __METHOD__ ) ) {
+				$updater->output(
+					"PixelQuestRoblox: pq_roblox_player_index has unexpected schema (missing column $field); dropping for recreate.\n"
+				);
+				$db->dropTable( 'pq_roblox_player_index', __METHOD__ );
+
+				return true;
+			}
+		}
+
+		return true;
 	}
 
 	/**
@@ -49,7 +80,7 @@ final class Hooks {
 		$def['pqroblox-pub-characters-inventory'] = 'none';
 		$def['pqroblox-pub-graveyard'] = 'everyone';
 		$def['pqroblox-pub-skins'] = 'none';
-		$def['pqroblox-pub-badges'] = 'everyone';
+		$def['pqroblox-pub-badges'] = 'none';
 		$def['pqroblox-pub-honor'] = 'everyone';
 		$def['pqroblox-pub-vault'] = 'none';
 		$def['pqroblox-pub-account-stats'] = 'none';
@@ -139,7 +170,7 @@ final class Hooks {
 			'pqroblox-pub-badges',
 			'pqroblox-pref-badges',
 			'pqroblox-pref-badges-help',
-			'everyone'
+			'none'
 		);
 		$makeSelect(
 			'pqroblox-pub-honor',
@@ -159,6 +190,24 @@ final class Hooks {
 			'pqroblox-pref-account-stats-help',
 			'none'
 		);
+	}
+
+	/**
+	 * Badge sprite size (20×20) for wiki pages: add class pq-roblox-badge-ico to badge images in infoboxes.
+	 */
+	public static function onBeforePageDisplay( OutputPage $out, Skin $skin ): void {
+		if ( strtolower( (string)$out->getRequest()->getVal( 'action', 'view' ) ) !== 'view' ) {
+			return;
+		}
+		$t = $out->getTitle();
+		if ( !$t instanceof Title ) {
+			return;
+		}
+		$n = $t->getNamespace();
+		if ( $n !== \NS_MAIN && $n !== \NS_FILE ) {
+			return;
+		}
+		$out->addModuleStyles( 'ext.pqroblox.badge' );
 	}
 
 	/**
@@ -376,6 +425,10 @@ final class Hooks {
 		};
 
 		$chars = $stateToVisible( $stateChars );
+		$badgesVisible = $stateToVisible( $stateBadges );
+		if ( !$viewer->isRegistered() && !$isOwner ) {
+			$badgesVisible = false;
+		}
 		return [
 			'valor' => $stateToVisible( $stateValor ),
 			'last_seen' => $stateToVisible( $stateLastSeen ),
@@ -384,7 +437,7 @@ final class Hooks {
 			'characters_inventory' => $chars && $stateToVisible( $stateCharsInv ),
 			'graveyard' => $stateToVisible( $stateGrave ),
 			'skins' => $stateToVisible( $stateSkins ),
-			'badges' => $stateToVisible( $stateBadges ),
+			'badges' => $badgesVisible,
 			'honor' => $stateToVisible( $stateHonor ),
 			'vault' => $stateToVisible( $stateVault ),
 			'account_stats' => $stateToVisible( $stateAccountStats ),

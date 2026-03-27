@@ -2,6 +2,8 @@
 |difficulty=
 |portal_image=
 |portal_table=
+|ost_youtube=
+|ost_caption=
 |map_section=
 |screenshots_section=
 |found_entities=
