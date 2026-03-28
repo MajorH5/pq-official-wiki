@@ -110,4 +110,33 @@ final class PqRobloxConfig {
 		}
 		return 20;
 	}
+
+	/**
+	 * Per-minute budget for Roblox/DataStore "units" (username lookup + datastore read each count as one).
+	 * Anonymous IPs.
+	 */
+	public static function getProfileOutboundBudgetPerMinuteAnon(): int {
+		global $wgPqRobloxProfileOutboundPerMinuteAnon;
+		if ( isset( $wgPqRobloxProfileOutboundPerMinuteAnon ) && is_int( $wgPqRobloxProfileOutboundPerMinuteAnon ) ) {
+			return max( 0, $wgPqRobloxProfileOutboundPerMinuteAnon );
+		}
+		$v = getenv( 'PQ_PROFILE_OUTBOUND_PER_MIN_ANON' );
+		if ( is_string( $v ) && is_numeric( $v ) ) {
+			return max( 0, (int)$v );
+		}
+		return 36;
+	}
+
+	/** @see getProfileOutboundBudgetPerMinuteAnon() */
+	public static function getProfileOutboundBudgetPerMinuteUser(): int {
+		global $wgPqRobloxProfileOutboundPerMinuteUser;
+		if ( isset( $wgPqRobloxProfileOutboundPerMinuteUser ) && is_int( $wgPqRobloxProfileOutboundPerMinuteUser ) ) {
+			return max( 0, $wgPqRobloxProfileOutboundPerMinuteUser );
+		}
+		$v = getenv( 'PQ_PROFILE_OUTBOUND_PER_MIN_USER' );
+		if ( is_string( $v ) && is_numeric( $v ) ) {
+			return max( 0, (int)$v );
+		}
+		return 72;
+	}
 }

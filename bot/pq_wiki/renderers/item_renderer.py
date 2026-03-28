@@ -52,6 +52,7 @@ def build_item_wikitext(
     go_name_to_id: dict[str, int] | None = None,
     entity_id_to_path: dict[int, str] | None = None,
     status_effect_icons: dict[str, str] | None = None,
+    status_effect_name_to_path: dict[str, str] | None = None,
     valor_icon_wikitext: str | None = None,
 ) -> str:
     tier = item.get("Tier", "")
@@ -128,7 +129,9 @@ def build_item_wikitext(
     _append_consumable_value_row(item, hier, hier_set, hier_l, info_rows, valor_icon_wikitext)
     _append_numeric_and_commerce_rows(item, info_rows, valor_icon_wikitext)
     _append_weapon_and_area_rows(item, hier_set, info_rows)
-    _append_status_and_effect_rows(item, hier_set, info_rows, status_effect_icons)
+    _append_status_and_effect_rows(
+        item, hier_set, info_rows, status_effect_icons, status_effect_name_to_path
+    )
     _append_type_specific_rows(
         site,
         item,
@@ -144,6 +147,7 @@ def build_item_wikitext(
         entity_id_to_path,
         entity_id_to_go,
         status_effect_icons,
+        status_effect_name_to_path,
     )
 
     triggers = _format_trigger_descriptions(item.get("TriggerDescriptions"))
@@ -251,7 +255,9 @@ def build_item_wikitext(
                 ws_rows.append(("Multi-hit", fmt_num(proj.get("MaxHitsPerEntity"))))
         pse = proj.get("StatusEffects")
         if pse:
-            pse_cell = _format_status_effects(pse, status_effect_icons)
+            pse_cell = _format_status_effects(
+                pse, status_effect_icons, status_effect_name_to_path
+            )
             if pse_cell:
                 ws_rows.append(("Status effects", pse_cell))
         if "Secondary Ability" in hier_set and item.get("Cooldown") is not None:
@@ -502,10 +508,11 @@ def _append_status_and_effect_rows(
     hier_set: set[str],
     info_rows: list[tuple[str, str]],
     status_effect_icons: dict[str, str] | None,
+    status_effect_name_to_path: dict[str, str] | None = None,
 ) -> None:
     se = item.get("StatusEffects")
     if se:
-        cell = _format_status_effects(se, status_effect_icons)
+        cell = _format_status_effects(se, status_effect_icons, status_effect_name_to_path)
         if cell:
             info_rows.append(("Status effects", cell))
     if "Flag" in hier_set or "Bomb" in hier_set:
@@ -589,6 +596,7 @@ def _append_type_specific_rows(
     entity_id_to_path: dict[int, str] | None,
     entity_id_to_go: dict[int, dict] | None,
     status_effect_icons: dict[str, str] | None,
+    status_effect_name_to_path: dict[str, str] | None = None,
 ) -> None:
     if "Clover" in hier_set:
         if item.get("LuckBoost") is not None:

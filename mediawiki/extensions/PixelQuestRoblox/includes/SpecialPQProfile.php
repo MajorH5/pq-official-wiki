@@ -12,6 +12,7 @@ use PixelQuestRoblox\Service\PqRobloxFriendService;
 use PixelQuestRoblox\Service\PqRobloxLinkStore;
 use PixelQuestRoblox\Service\PqRobloxLookupIndex;
 use PixelQuestRoblox\Service\PqRobloxPlayerIndexStore;
+use PixelQuestRoblox\Service\PqRobloxProfileRateLimit;
 use PixelQuestRoblox\Service\PqRobloxUsersApi;
 
 final class SpecialPQProfile extends SpecialPage {
@@ -86,6 +87,9 @@ final class SpecialPQProfile extends SpecialPage {
 				return;
 			}
 			$robloxId = (int)$link['robloxUserId'];
+			if ( !$this->consumeProfileOutboundOrError( $viewer ) ) {
+				return;
+			}
 		} else {
 			$subLower = strtolower( $sub );
 			if ( str_starts_with( $subLower, 'wiki/' ) ) {
@@ -109,14 +113,35 @@ final class SpecialPQProfile extends SpecialPage {
 			if ( preg_match( '/^\d+$/', $name ) ) {
 				$robloxId = (int)$name;
 				if ( $robloxId <= 0 ) {
+					$out->setPageTitle( $this->msg( 'pqprofile' )->text() );
 					$out->addWikiMsg( 'pqroblox-profile-not-found-roblox' );
 					return;
 				}
+				if ( !$this->consumeProfileOutboundOrError( $viewer ) ) {
+					return;
+				}
 			} else {
+				if ( strlen( $name ) > 64 ) {
+					$out->setPageTitle( $this->msg( 'pqprofile' )->text() );
+					$out->addWikiMsg( 'pqroblox-profile-not-found-roblox' );
+					return;
+				}
 				$row = $indexStore->findByUsername( $name );
 				if ( $row !== null ) {
 					$robloxId = (int)$row['robloxUserId'];
+					if ( !$this->consumeProfileOutboundOrError( $viewer ) ) {
+						return;
+					}
 				} else {
+					if ( !$this->consumeProfileOutboundOrError( $viewer ) ) {
+						return;
+					}
+					$resolvedId = PqRobloxUsersApi::getUserIdFromUsername( $name );
+					if ( $resolvedId !== null && $resolvedId > 0 ) {
+						$out->redirect( Title::makeTitle( NS_SPECIAL, 'PQProfile/' . $resolvedId )->getFullURL() );
+						return;
+					}
+					$out->setPageTitle( $this->msg( 'pqprofile' )->text() );
 					$out->addWikiMsg( 'pqroblox-profile-not-found-roblox' );
 					return;
 				}
@@ -144,9 +169,8 @@ final class SpecialPQProfile extends SpecialPage {
 
 		$playerData = PqRobloxDataStoreClient::getPlayerDataForRobloxUser( $robloxId, $forceRefresh );
 		if ( $playerData === null ) {
-			$out->setPageTitle( $this->msg( 'special-pqprofile' )->text() );
-			$out->addHTML( Html::rawElement( 'div', [ 'class' => 'warningbox' ],
-				$this->msg( 'pqroblox-profile-not-found-save' )->escaped() ) );
+			$out->setPageTitle( $this->msg( 'pqprofile' )->text() );
+			$out->addHTML( Html::element( 'p', [], $this->msg( 'pqroblox-profile-not-found-save' )->text() ) );
 			return;
 		}
 
@@ -194,6 +218,16 @@ final class SpecialPQProfile extends SpecialPage {
 		);
 	}
 
+	private function consumeProfileOutboundOrError( User $viewer ): bool {
+		if ( !PqRobloxProfileRateLimit::allowOutbound( $viewer, $this->getRequest() ) ) {
+			$out = $this->getOutput();
+			$out->setPageTitle( $this->msg( 'pqprofile' )->text() );
+			$out->addWikiMsg( 'pqroblox-profile-rate-limited' );
+			return false;
+		}
+		return true;
+	}
+
 	private static function computeProfileOwner(
 		User $viewer,
 		User $target,
@@ -236,7 +270,7 @@ final class SpecialPQProfile extends SpecialPage {
 				'valor' => false,
 				'last_seen' => true,
 				'characters' => true,
-				'characters_detail' => false,
+				'characters_detail' => true,
 				'characters_inventory' => false,
 				'graveyard' => true,
 				'skins' => false,
@@ -264,7 +298,11 @@ final class SpecialPQProfile extends SpecialPage {
 		$userOptionsLookup = MediaWikiServices::getInstance()->getUserOptionsLookup();
 
 		$getState = static function ( string $key ) use ( $target, $userOptionsLookup ): string {
-			return (string)$userOptionsLookup->getOption( $target, $key, '0' );
+			return (string)$userOptionsLookup->getOption(
+				$target,
+				$key,
+				Hooks::getPqRobloxPubDefaultOption( $key )
+			);
 		};
 
 		$stateValor = $getState( 'pqroblox-pub-valor' );

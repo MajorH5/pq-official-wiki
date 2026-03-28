@@ -66,6 +66,7 @@
 	"pqroblox-profile-hidden": "Hidden",
 	"pqroblox-profile-nodata": "Could not load your Pixel Quest save. Try again later.",
 	"pqroblox-profile-not-found-save": "Roblox user not found.",
+	"pqroblox-profile-rate-limited": "Too many profile requests were made from your connection. Please wait a minute and try again.",
 	"pqroblox-profile-not-linked": "User \"$1\" has not linked a Pixel Quest account.",
 	"pqroblox-profile-user-not-found": "Wiki user not found.",
 	"pqroblox-profile-not-found-roblox": "Roblox user not found.",

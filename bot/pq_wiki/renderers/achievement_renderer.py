@@ -8,14 +8,29 @@ from pq_wiki.achievement_icons import upload_achievement_icon
 from pq_wiki.datadump_helpers import (
     achievement_category_id,
     achievement_category_label,
+    achievement_group_label,
     achievement_series_label,
+    achievement_series_name_if_defined,
     find_item_id_by_name,
     find_t0_weapon_item_for_class,
 )
+from pq_wiki.texture_names import portal_preview_base, slug
+from pq_wiki.texture_service import upload_portal_preview
 from pq_wiki.honor_icons import honor_bronze_wikitext
 from pq_wiki.reward_wikitext import render_metadata_section, render_rewards_wikitable
 from pq_wiki.seo import first_wiki_filename_from_file_wikitext, plain_text_for_seo, wiki_seo_block
 from pq_wiki.wikitext_util import html_to_wikitext, template_invocation
+
+
+_LUCKY_ACHIEVEMENT_GROUP_ID = 5
+
+
+def _link_file_wikitext_to_page(img_wiki: str, page_path: str) -> str:
+    marker = "]]"
+    i = img_wiki.find(marker)
+    if i == -1:
+        return img_wiki
+    return f"{img_wiki[:i]}|link={page_path}{img_wiki[i:]}"
 
 
 def _norm_metadata(raw: Any) -> dict[str, Any]:
@@ -42,8 +57,10 @@ def build_achievement_wikitext(
     honor_icon_map: dict[int, str],
     location_id_to_path: dict[int, str],
     location_name_to_path: dict[str, str],
+    location_id_to_loc: dict[int, dict[str, Any]] | None = None,
     achievement_categories: dict[str, Any] | None,
     achievement_series: dict[str, Any] | None,
+    achievement_groups: dict[str, Any] | None = None,
     wiki_hidden: bool = False,
     unreleased: bool = False,
 ) -> str:
@@ -127,8 +144,32 @@ def build_achievement_wikitext(
         details_rows.append(("Series", achievement_series_label(series_id, achievement_series)))
         details_rows.append(("Sequence", str(seq)))
     if group_id != -1:
-        details_rows.append(("Group", str(group_id)))
-    if subgroup_id != -1:
+        details_rows.append(
+            ("Group", achievement_group_label(group_id, achievement_groups)),
+        )
+    if group_id == _LUCKY_ACHIEVEMENT_GROUP_ID and subgroup_id != -1:
+        loc = (location_id_to_loc or {}).get(subgroup_id)
+        if loc:
+            lname = str(loc.get("Name") or f"Location {subgroup_id}")
+            path = location_id_to_path.get(subgroup_id, lname)
+            link = f"[[{path}|{lname}]]"
+            portal_w = ""
+            portal = loc.get("PortalSprite")
+            if isinstance(portal, dict) and portal:
+                portal_w = upload_portal_preview(
+                    site,
+                    portal,
+                    version,
+                    logical_name=portal_preview_base(slug(lname)),
+                    thumb_size=48,
+                )
+                if portal_w:
+                    portal_w = _link_file_wikitext_to_page(portal_w, path)
+            cell = f"{portal_w} {link}".strip() if portal_w else link
+            details_rows.append(("Dungeon", cell))
+        else:
+            details_rows.append(("Dungeon", str(subgroup_id)))
+    elif subgroup_id != -1:
         details_rows.append(("Sub-group", str(subgroup_id)))
     if class_id != -1:
         details_rows.append(("Classification", str(class_id)))
@@ -141,12 +182,14 @@ def build_achievement_wikitext(
         tag_hidden = "''This achievement is hidden in-game; it is shown on the wiki by override.''"
 
     cat_lines = ["[[Category:Achievements]]", f"[[Category:{cat_label} achievements]]"]
-    if series_id != -1 and group_id != -1:
-        series_title = achievement_series_label(series_id, achievement_series)
-        cat_lines.append(f"[[Category:{series_title} Achievements]]")
+    if series_id != -1:
+        series_for_cat = achievement_series_name_if_defined(series_id, achievement_series)
+        if series_for_cat:
+            cat_lines.append(f"[[Category:{series_for_cat} achievements]]")
     if group_id != -1:
-        cat_lines.append(f"[[Category:Group {group_id} achievements]]")
-    if subgroup_id != -1:
+        group_cat = achievement_group_label(group_id, achievement_groups)
+        cat_lines.append(f"[[Category:{group_cat} achievements]]")
+    if subgroup_id != -1 and group_id != _LUCKY_ACHIEVEMENT_GROUP_ID:
         cat_lines.append(f"[[Category:Sub-group {subgroup_id} achievements]]")
     if class_id != -1:
         cat_lines.append(f"[[Category:Classification {class_id} achievements]]")

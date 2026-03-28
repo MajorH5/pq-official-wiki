@@ -1,0 +1,3 @@
+<noinclude>
+'''Status effect layout (reference)''' — the bot writes one [[Status effects]] page with a <code>== section ==</code> per effect (achievement-style icon + wikitable). Inline links use fragments, e.g. <code><nowiki>[[Status effects#Bleeding|Bleeding]]</nowiki></code>. This template is not used by the import bot.
+</noinclude>

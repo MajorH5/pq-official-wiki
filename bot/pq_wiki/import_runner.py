@@ -40,6 +40,7 @@ from pq_wiki.loot_tier_icons import build_drop_tier_icon_parts_map, build_drop_t
 from pq_wiki.skin_rarity_icons import build_skin_rarity_wikitext_map
 from pq_wiki.honor_icons import build_honor_icon_wikitext_map
 from pq_wiki.render_pages import (
+    STATUS_EFFECTS_INDEX_TITLE,
     achievement_page_path,
     account_stat_page_path,
     badge_page_path,
@@ -50,6 +51,8 @@ from pq_wiki.render_pages import (
     build_item_wikitext,
     build_location_wikitext,
     build_skin_wikitext,
+    build_status_effect_name_to_path_map,
+    build_status_effects_index_wikitext,
     entity_page_path,
     item_page_path,
     location_page_path,
@@ -252,12 +255,22 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
             continue
         achievements.append(a)
 
+    status_effects_raw = data.get("StatusEffects") or []
+    if not isinstance(status_effects_raw, list):
+        status_effects_raw = []
+    status_effects_rows: list[dict[str, Any]] = [
+        s for s in status_effects_raw if isinstance(s, dict) and int(s.get("Id", -1)) >= 0
+    ]
+
     achievement_categories = data.get("AchievementCategories")
     achievement_series = data.get("AchievementSeries")
+    achievement_groups = data.get("AchievementGroups")
     if not isinstance(achievement_categories, dict):
         achievement_categories = None
     if not isinstance(achievement_series, dict):
         achievement_series = None
+    if not isinstance(achievement_groups, dict):
+        achievement_groups = None
 
     log.info(
         "Overrides loaded: skip(items=%d,locations=%d,entities=%d,skins=%d,badges=%d,achievements=%d) "
@@ -310,13 +323,15 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
 
     if nlim:
         log.info(
-            "GENERATE_FEW_PAGES cap %d per type: importing %d items, %d locations, %d entities, %d skins, %d account stats",
+            "GENERATE_FEW_PAGES cap %d per type: importing %d items, %d locations, %d entities, "
+            "%d skins, %d account stats (status effects: always one combined index, %d sections)",
             nlim,
             len(items_to_process),
             len(locations_to_process),
             len(entities_to_process),
             len(skins_to_process),
             len(account_stats_to_process),
+            len(status_effects_rows),
         )
 
     item_name_to_id: dict[str, int] = {}
@@ -350,6 +365,18 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
         lname = loc.get("Name")
         if lname and loc.get("Id") in location_id_to_path:
             location_name_to_path[str(lname)] = location_id_to_path[loc["Id"]]
+
+    location_id_to_loc: dict[int, dict[str, Any]] = {}
+    for loc in locations:
+        if not isinstance(loc, dict):
+            continue
+        lid = loc.get("Id")
+        if lid is None:
+            continue
+        try:
+            location_id_to_loc[int(lid)] = loc
+        except (TypeError, ValueError):
+            continue
 
     location_name_to_portal: dict[str, dict[str, Any]] = {}
     for loc in locations:
@@ -439,6 +466,8 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
         base = achievement_page_path(ach, used)
         achievement_id_to_path[aid] = _with_unreleased_namespace(base, is_unreleased)
 
+    status_effect_name_to_path = build_status_effect_name_to_path_map(status_effects_rows)
+
     badges_for_diff = [b for b in badges_raw if isinstance(b, dict) and int(b.get("Id", 0)) >= 0]
     achievements_for_diff = [
         a for a in achievements_raw if isinstance(a, dict) and int(a.get("Id", 0)) >= 0
@@ -452,6 +481,7 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
     cs: set[int] = set()
     cb: set[int] = set()
     ca: set[int] = set()
+    cfx: set[int] = set()
     import_full = (
         old_cached is None
         or last_state.get("render_fingerprint") != render_fp
@@ -463,7 +493,7 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
             "Full wiki rebuild (no/partial cache, render fingerprint changed, PQ_IMPORT_FULL, or --force)",
         )
     else:
-        ci, cl, ce, cs, cb, ca = compute_incremental_sets(
+        ci, cl, ce, cs, cb, ca, cfx = compute_incremental_sets(
             old_data=old_cached,
             new_items=items,
             new_locations=locations,
@@ -471,18 +501,21 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
             new_character_skins=character_skins,
             new_badges=badges_for_diff,
             new_achievements=achievements_for_diff,
+            new_status_effects=status_effects_rows,
             unreleased_entities=unreleased_entities,
         )
         log.info(
-            "Incremental scope: %d items, %d locations, %d entities, %d skins, %d badges, %d achievements with data changes",
+            "Incremental scope: %d items, %d locations, %d entities, %d skins, %d badges, "
+            "%d achievements, %d status effect rows changed (index page if any)",
             len(ci),
             len(cl),
             len(ce),
             len(cs),
             len(cb),
             len(ca),
+            len(cfx),
         )
-        if not ci and not cl and not ce and not cs and not cb and not ca:
+        if not ci and not cl and not ce and not cs and not cb and not ca and not cfx:
             log.info("Incremental diff: no page updates needed (wikitext would be unchanged)")
 
     stats: dict[str, int] = {}
@@ -552,6 +585,20 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
             errors.append(f"{kind} {title}")
             log.error("FAILED %s%s %s\n%s", prefix, kind, title, traceback.format_exc())
 
+    if import_full or cfx:
+        def build_status_effects_index():
+            return build_status_effects_index_wikitext(site, status_effects_rows, data, version)
+
+        def save_status_index(s, ttl, txt, ver, user, k):
+            return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=FORCE_OVERWRITE)
+
+        _one(
+            "status_effects_index",
+            STATUS_EFFECTS_INDEX_TITLE,
+            build_status_effects_index,
+            save_status_index,
+        )
+
     n_items = len(items_work)
     for idx, it in enumerate(items_work, start=1):
         path = item_id_to_path[it["Id"]]
@@ -575,6 +622,7 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
                 go_name_to_id=go_name_to_id,
                 entity_id_to_path=entity_id_to_path,
                 status_effect_icons=status_effect_icons,
+                status_effect_name_to_path=status_effect_name_to_path,
                 valor_icon_wikitext=valor_icon_wikitext,
             )
 
@@ -641,6 +689,7 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
                 drop_tier_icon_parts=drop_tier_icon_parts,
                 stat_icons=stat_icons,
                 status_effect_icons=status_effect_icons,
+                status_effect_name_to_path=status_effect_name_to_path,
                 unreleased=int(g["Id"]) in unreleased_entities,
                 entity_id_to_go=entity_id_to_go,
                 skin_id_to_skin=skin_id_to_skin,
@@ -744,8 +793,10 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
                 honor_icon_map=honor_icon_map,
                 location_id_to_path=location_id_to_path,
                 location_name_to_path=location_name_to_path,
+                location_id_to_loc=location_id_to_loc,
                 achievement_categories=achievement_categories,
                 achievement_series=achievement_series,
+                achievement_groups=achievement_groups,
                 wiki_hidden=wh,
                 unreleased=int(a["Id"]) in unreleased_achievements,
             )

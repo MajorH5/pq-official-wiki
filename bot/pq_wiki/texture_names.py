@@ -112,7 +112,13 @@ def difficulty_skull_base() -> str:
 
 
 def status_effect_base(effect_name: str) -> str:
+    """Deprecated: use status_effect_sprite_base(effect_id, name) for stable filenames."""
     return sanitize_base(f"status_effect_{slug(effect_name)}")
+
+
+def status_effect_sprite_base(effect_id: int, effect_name: str) -> str:
+    """16×16 crop upload; [[Status effects]] sections use the same file with larger display size in wikitext."""
+    return sanitize_base(f"status_effect_{slug(effect_name)}_{effect_id}")
 
 
 def portal_preview_base(location_slug: str) -> str:

@@ -38,6 +38,25 @@ def _pct_from_fraction(v: float) -> str:
     return f"{sign}{f * 100:.0f}%"
 
 
+def _pct_plain_percent(v: float) -> str:
+    """Percent only, no leading + (e.g. damage threshold lines)."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return str(v)
+    return f"{f * 100:.0f}%"
+
+
+def _link_location_display(name: str, location_name_to_path: dict[str, str]) -> str:
+    n = (name or "").strip()
+    if not n:
+        return ""
+    path = location_name_to_path.get(n)
+    if path:
+        return f"[[{path}|{n}]]"
+    return f"'''{n}'''"
+
+
 def _format_duration_seconds(sec: float) -> str:
     try:
         s = int(float(sec))
@@ -97,18 +116,23 @@ def format_reward_cell_wikitext(
         parts.append(_stat_icon_wikitext(stat_icons, stat, label))
 
     elif rtype == "LuckBoost":
-        dungeon = str(reward.get("Dungeon") or "")
+        dungeon = str(reward.get("Dungeon") or "").strip()
         val = reward.get("Value")
-        pct = _pct_from_fraction(float(val)) if val is not None else ""
+        # Dump stores multiplier (1.01 = +1% luck); convert increment to a percent fraction.
+        pct = ""
+        if val is not None:
+            try:
+                pct = _pct_from_fraction(float(val) - 1.0)
+            except (TypeError, ValueError):
+                pct = ""
+        dungeon_disp = _link_location_display(dungeon, location_name_to_path) if dungeon else ""
+        luck_tail = f" Luck in {dungeon_disp}: {pct}" if dungeon_disp else f" Luck: {pct}"
         if lucky_clover_item_id and lucky_clover_item_id in item_id_to_item:
             it = item_id_to_item[lucky_clover_item_id]
             base = item_sprite_base(lucky_clover_item_id, str(it.get("Name") or "Lucky Clover"))
-            parts.append(
-                file_wikitext(f"{base}.png", thumb_px)
-                + f" Luck in '''{dungeon}''': {pct}"
-            )
+            parts.append(file_wikitext(f"{base}.png", thumb_px) + luck_tail)
         else:
-            parts.append(f"Luck in '''{dungeon}''': {pct}")
+            parts.append(luck_tail.lstrip())
 
     elif rtype == "MasteryBoost":
         wclass = str(reward.get("WeaponClass") or "").strip()
@@ -219,11 +243,16 @@ def render_metadata_section(
                     pass
         if ids:
             bits = []
+            thumb = 24
             for iid in ids:
                 it = item_id_to_item.get(iid)
                 if it:
                     path = item_id_to_path.get(iid, f"Item {iid}")
-                    bits.append(f"[[{path}|{it.get('Name', iid)}]]")
+                    base = item_sprite_base(iid, str(it.get("Name") or f"Item {iid}"))
+                    bits.append(
+                        file_wikitext(f"{base}.png", thumb)
+                        + f" [[{path}|{it.get('Name', iid)}]]"
+                    )
                 else:
                     bits.append(str(iid))
             rows.append(("Qualified Legendaries", ", ".join(bits)))
@@ -250,7 +279,7 @@ def render_metadata_section(
             v = float(metadata["3"])
         except (TypeError, ValueError):
             v = 0.0
-        rows.append(("Damage Threshold", _pct_from_fraction(v) + " DMG"))
+        rows.append(("Damage Threshold", _pct_plain_percent(v) + " DMG"))
 
     if not rows:
         return ""

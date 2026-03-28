@@ -52,6 +52,7 @@ _RENDER_CODE_PATHS: tuple[Path, ...] = (
     BOT_ROOT / "pq_wiki" / "skin_rarity_icons.py",
     BOT_ROOT / "pq_wiki" / "stat_icons.py",
     BOT_ROOT / "pq_wiki" / "status_effect_icons.py",
+    BOT_ROOT / "pq_wiki" / "renderers" / "status_effect_renderer.py",
     BOT_ROOT / "pq_wiki" / "valor_icon.py",
 )
 
@@ -241,6 +242,25 @@ def diff_achievement_ids(
     return changed
 
 
+def diff_status_effect_ids(
+    old_data: dict[str, Any],
+    new_rows: list[dict[str, Any]],
+) -> set[int]:
+    old_rows = old_data.get("StatusEffects") or []
+    new_idx = _index_by_id(new_rows)
+    old_idx = _index_by_id(list(old_rows) if isinstance(old_rows, list) else [])
+    changed: set[int] = set()
+    for sid, row in new_idx.items():
+        if sid < 0:
+            continue
+        if sid not in old_idx:
+            changed.add(sid)
+            continue
+        if _object_hash(row) != _object_hash(old_idx[sid]):
+            changed.add(sid)
+    return changed
+
+
 def diff_skin_ids(
     old_data: dict[str, Any],
     new_skins: list[dict[str, Any]],
@@ -360,9 +380,10 @@ def compute_incremental_sets(
     new_character_skins: list[dict[str, Any]],
     new_badges: list[dict[str, Any]],
     new_achievements: list[dict[str, Any]],
+    new_status_effects: list[dict[str, Any]],
     unreleased_entities: set[int],
-) -> tuple[set[int], set[int], set[int], set[int], set[int], set[int]]:
-    """Returns changed ids: items, locations, entities, skins, badges, achievements."""
+) -> tuple[set[int], set[int], set[int], set[int], set[int], set[int], set[int]]:
+    """Returns changed ids: items, locations, entities, skins, badges, achievements, status effects."""
     ci = diff_item_ids(
         old_data,
         new_items,
@@ -374,4 +395,5 @@ def compute_incremental_sets(
     cs = diff_skin_ids(old_data, new_character_skins)
     cb = diff_badge_ids(old_data, new_badges)
     ca = diff_achievement_ids(old_data, new_achievements)
-    return ci, cl, ce, cs, cb, ca
+    cfx = diff_status_effect_ids(old_data, new_status_effects)
+    return ci, cl, ce, cs, cb, ca, cfx

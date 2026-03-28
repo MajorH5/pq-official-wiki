@@ -1,97 +1,119 @@
 from __future__ import annotations
 
 import io
-from typing import Optional
+from typing import Any, Optional
 
 import pywikibot
 from PIL import Image
 
 from pq_wiki.roblox_assets import fetch_asset_bytes, parse_asset_id
-from pq_wiki.texture_names import status_effect_base
+from pq_wiki.sprites import get_texture_url, render_static_sprite
+from pq_wiki.texture_names import status_effect_sprite_base
 from pq_wiki.texture_service import upload_raw_bytes_named
 
-_ICON_SIZE = 16
-
-# Atlas: STATUS_EFFECTS_16X16 — imageRectOffset (top-left) per effect name in the sheet.
-_STATUS_POSITIONS: dict[str, dict[str, int]] = {
-    "Reflecting": {"Y": 64, "X": 80},
-    "Ignored": {"Y": 96, "X": 0},
-    "Petrify Immune": {"Y": 64, "X": 64},
-    "Dazed": {"Y": 16, "X": 80},
-    "Exposed": {"Y": 32, "X": 64},
-    "Vampric": {"Y": 80, "X": 64},
-    "Hastened": {"Y": 16, "X": 48},
-    "Recharging": {"Y": 112, "X": 32},
-    "Bleeding": {"Y": 0, "X": 0},
-    "Burning": {"Y": 16, "X": 0},
-    "Protected": {"Y": 112, "X": 0},
-    "Mana Burn": {"Y": 64, "X": 32},
-    "Sick": {"Y": 80, "X": 0},
-    "Speedy": {"Y": 48, "X": 48},
-    "Frost": {"Y": 32, "X": 0},
-    "Regeneration": {"Y": 112, "X": 16},
-    "Quiet": {"Y": 64, "X": 16},
-    "Petrify": {"Y": 64, "X": 48},
-    "Rallied": {"Y": 0, "X": 150},
-    "Invulnerable": {"Y": 16, "X": 16},
-    "Focused": {"Y": 48, "X": 32},
-    "HP Boost": {"Y": 0, "X": 32},
-    "Spectating": {"Y": 96, "X": 32},
-    "Healing": {"Y": 32, "X": 48},
-    "Paralyze": {"Y": 48, "X": 0},
-    "Tanky": {"Y": 32, "X": 32},
-    "Slowed": {"Y": 48, "X": 80},
-    "Vulnerable": {"Y": 96, "X": 64},
-    "AFK": {"Y": 96, "X": 16},
-    "Stunned": {"Y": 80, "X": 16},
-    "MP Boost": {"Y": 16, "X": 32},
-    "Strengthened": {"Y": 0, "X": 48},
-    "Armored": {"Y": 0, "X": 16},
-    "Armor Broken": {"Y": 64, "X": 0},
-}
+_DISPLAY_16 = 16
 
 
-def _sheet_asset_id_from_dump(datadump: dict) -> Optional[str]:
+def status_effects_atlas_texture_string(datadump: dict[str, Any]) -> Optional[str]:
+    """Roblox texture string for the STATUS_EFFECTS_16X16 sheet (fallback when per-effect Sprite has no Texture)."""
     textures = datadump.get("Textures") or {}
-    tex = textures.get("STATUS_EFFECTS_16X16")
+    t = textures.get("STATUS_EFFECTS_16X16")
+    if isinstance(t, dict):
+        t = t.get("Texture") or t.get("texture")
+    if isinstance(t, str) and t.strip():
+        return t.strip()
+    return None
+
+
+def _sprite_dict_with_sheet(sprite: dict[str, Any], sheet_tex: str) -> dict[str, Any]:
+    sp = dict(sprite)
+    if not get_texture_url(sp):
+        sp["Texture"] = sheet_tex
+    return sp
+
+
+def load_status_effect_atlas(datadump: dict[str, Any]) -> tuple[Image.Image, str] | None:
+    tex = status_effects_atlas_texture_string(datadump)
     if not tex:
         return None
-    if isinstance(tex, dict):
-        tex = tex.get("Texture") or tex.get("texture")
-    if not isinstance(tex, str):
+    aid = parse_asset_id(tex)
+    if not aid:
         return None
-    return parse_asset_id(tex)
+    try:
+        raw = fetch_asset_bytes(aid)
+    except Exception:
+        return None
+    sheet = Image.open(io.BytesIO(raw)).convert("RGBA")
+    return sheet, tex
+
+
+def effect_entry_to_png_bytes(
+    effect: dict[str, Any],
+    default_sheet: Image.Image | None,
+    default_sheet_tex: str,
+) -> Optional[bytes]:
+    sp = effect.get("Sprite")
+    if not isinstance(sp, dict):
+        return None
+    tex = get_texture_url(sp)
+    if tex:
+        aid = parse_asset_id(tex)
+        if aid:
+            try:
+                raw = fetch_asset_bytes(aid)
+                own = Image.open(io.BytesIO(raw)).convert("RGBA")
+                return render_static_sprite(sp, own)
+            except Exception:
+                return None
+    if default_sheet is None or not (default_sheet_tex or "").strip():
+        return None
+    merged = _sprite_dict_with_sheet(sp, default_sheet_tex)
+    try:
+        return render_static_sprite(merged, default_sheet)
+    except Exception:
+        return None
 
 
 def build_status_effect_icon_wikitext_map(
     site: pywikibot.Site,
-    datadump: dict,
+    datadump: dict[str, Any],
     version: str,
 ) -> dict[str, str]:
     """
-    Returns lowercase status-name -> 16px file wikitext.
+    Lowercase status effect Name -> 16px [[File:...]] wikitext from StatusEffects[].Sprite + atlas.
     """
-    aid = _sheet_asset_id_from_dump(datadump)
-    if not aid:
+    loaded = load_status_effect_atlas(datadump)
+    if not loaded:
+        return {}
+    sheet, sheet_tex = loaded
+
+    rows = datadump.get("StatusEffects") or []
+    if not isinstance(rows, list):
         return {}
 
-    raw = fetch_asset_bytes(aid)
-    sheet = Image.open(io.BytesIO(raw)).convert("RGBA")
     out: dict[str, str] = {}
-    for name, pos in _STATUS_POSITIONS.items():
-        x = int(pos.get("X", 0))
-        y = int(pos.get("Y", 0))
-        icon = sheet.crop((x, y, x + _ICON_SIZE, y + _ICON_SIZE))
-        buf = io.BytesIO()
-        icon.save(buf, format="PNG")
-        data = buf.getvalue()
+    for effect in rows:
+        if not isinstance(effect, dict):
+            continue
+        name = str(effect.get("Name") or "").strip()
+        if not name:
+            continue
+        try:
+            eid = int(effect.get("Id") or 0)
+        except (TypeError, ValueError):
+            continue
+        if eid < 0:
+            continue
+        png = effect_entry_to_png_bytes(effect, sheet, sheet_tex)
+        if not png:
+            continue
         w = upload_raw_bytes_named(
             site,
-            data,
+            png,
             "png",
-            status_effect_base(name),
+            status_effect_sprite_base(eid, name),
             version,
-            thumb_size=_ICON_SIZE,
+            thumb_size=_DISPLAY_16,
         )
         if w:
             out[name.lower()] = w

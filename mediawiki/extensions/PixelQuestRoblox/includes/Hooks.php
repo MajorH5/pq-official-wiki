@@ -87,6 +87,30 @@ final class Hooks {
 	}
 
 	/**
+	 * Fallback when the option is not stored yet — must match onUserGetDefaultOptions.
+	 * Using getOption( ..., '0' ) incorrectly hid "characters detail" for everyone.
+	 */
+	public static function getPqRobloxPubDefaultOption( string $key ): string {
+		switch ( $key ) {
+			case 'pqroblox-pub-valor':
+			case 'pqroblox-pub-last-seen':
+			case 'pqroblox-pub-characters':
+			case 'pqroblox-pub-characters-detail':
+			case 'pqroblox-pub-graveyard':
+			case 'pqroblox-pub-honor':
+				return 'everyone';
+			case 'pqroblox-pub-characters-inventory':
+			case 'pqroblox-pub-skins':
+			case 'pqroblox-pub-badges':
+			case 'pqroblox-pub-vault':
+			case 'pqroblox-pub-account-stats':
+				return 'none';
+			default:
+				return 'everyone';
+		}
+	}
+
+	/**
 	 * @param \MediaWiki\User\User $user
 	 * @param array<string, array<string, mixed>> &$prefs
 	 */
@@ -373,7 +397,11 @@ final class Hooks {
 
 		$userOptionsLookup = MediaWikiServices::getInstance()->getUserOptionsLookup();
 		$getState = static function ( string $key ) use ( $target, $userOptionsLookup ): string {
-			return (string)$userOptionsLookup->getOption( $target, $key, '0' );
+			return (string)$userOptionsLookup->getOption(
+				$target,
+				$key,
+				self::getPqRobloxPubDefaultOption( $key )
+			);
 		};
 
 		$stateValor = $getState( 'pqroblox-pub-valor' );

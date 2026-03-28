@@ -45,6 +45,7 @@ final class PqRobloxFriendService {
 
 				$httpFactory = MediaWikiServices::getInstance()->getHttpRequestFactory();
 				do {
+					PqRobloxThrottle::waitTurn();
 					$url = "https://friends.roblox.com/v1/users/{$viewerRobloxId}/friends";
 					if ( is_string( $cursor ) && $cursor !== '' ) {
 						$url .= '?cursor=' . rawurlencode( $cursor );

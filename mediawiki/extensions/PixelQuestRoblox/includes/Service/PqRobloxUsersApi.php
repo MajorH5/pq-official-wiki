@@ -43,6 +43,7 @@ final class PqRobloxUsersApi {
 	 * @return array{name: string, displayName: string}|null
 	 */
 	private static function fetchPublicUserUncached( int $robloxUserId ): ?array {
+		PqRobloxThrottle::waitTurn();
 		$url = 'https://users.roblox.com/v1/users/' . $robloxUserId;
 		$req = MediaWikiServices::getInstance()->getHttpRequestFactory()->create(
 			$url,
@@ -95,6 +96,7 @@ final class PqRobloxUsersApi {
 			return $id > 0 ? $id : null;
 		}
 
+		PqRobloxThrottle::waitTurn();
 		$url = 'https://users.roblox.com/v1/usernames/users';
 		$req = MediaWikiServices::getInstance()->getHttpRequestFactory()->create(
 			$url,

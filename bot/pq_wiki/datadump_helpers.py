@@ -101,6 +101,32 @@ def achievement_series_label(series_num: int, achievement_series: dict[str, Any]
     return f"Series {series_num}"
 
 
+def achievement_series_name_if_defined(
+    series_num: int, achievement_series: dict[str, Any] | None
+) -> str | None:
+    """Enum display name for series id, or None if not present in AchievementSeries."""
+    if achievement_series and isinstance(achievement_series, dict):
+        for k, v in achievement_series.items():
+            try:
+                if int(v) == int(series_num):
+                    return _normalize_enum_display(str(k))
+            except (TypeError, ValueError):
+                continue
+    return None
+
+
+def achievement_group_label(group_num: int, achievement_groups: dict[str, Any] | None) -> str:
+    """Display name from AchievementGroups enum (e.g. LUCKY -> Lucky)."""
+    if achievement_groups and isinstance(achievement_groups, dict):
+        for k, v in achievement_groups.items():
+            try:
+                if int(v) == int(group_num):
+                    return _normalize_enum_display(str(k))
+            except (TypeError, ValueError):
+                continue
+    return f"Group {group_num}"
+
+
 def _normalize_enum_display(name: str) -> str:
     """ACHIEVEMENT_CATEGORY -> Achievement Category"""
     t = name.strip().replace("_", " ").lower()

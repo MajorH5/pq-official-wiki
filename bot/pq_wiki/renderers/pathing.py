@@ -103,3 +103,13 @@ def achievement_page_path(ach: dict, used_paths: set[str] | None = None) -> str:
     if used_paths is None:
         return _clean_title(ach.get("Name"), fb)
     return _claim_unique_title(ach.get("Name"), fb, aid, used_paths)
+
+
+# Bot emits one article; sections use == headings ==. Links: [[Status effects#Fragment|Name]].
+STATUS_EFFECTS_INDEX_TITLE = "Status effects"
+
+
+def status_effect_wikilink_path(heading_text: str) -> str:
+    """Wikilink target for a section heading (spaces → underscores in the fragment)."""
+    frag = str(heading_text).strip().replace(" ", "_")
+    return f"{STATUS_EFFECTS_INDEX_TITLE}#{frag}"

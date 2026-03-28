@@ -55,6 +55,7 @@ def build_entity_wikitext(
     drop_tier_icon_parts: dict[int, dict[str, str]] | None = None,
     stat_icons: dict[str, str] | None = None,
     status_effect_icons: dict[str, str] | None = None,
+    status_effect_name_to_path: dict[str, str] | None = None,
     unreleased: bool = False,
     entity_id_to_go: dict[int, dict] | None = None,
     skin_id_to_skin: dict[int, dict] | None = None,
@@ -117,7 +118,9 @@ def build_entity_wikitext(
                 ("Experience", fmt_range(exp.get("Min"), exp.get("Max"))),
             ]
         )
-    imm_txt = _format_immunities(go.get("Immunity"), status_effect_icons)
+    imm_txt = _format_immunities(
+        go.get("Immunity"), status_effect_icons, status_effect_name_to_path
+    )
     if imm_txt:
         st_rows.append(("Immunity", imm_txt))
     statistics_table = _html_statistics_table(st_rows) if st_rows else ""
@@ -141,7 +144,9 @@ def build_entity_wikitext(
     )
 
     projs = go.get("ProjectileDescriptors") or []
-    attacks_block = _build_attacks_section_wikitext(site, projs, version, status_effect_icons)
+    attacks_block = _build_attacks_section_wikitext(
+        site, projs, version, status_effect_icons, status_effect_name_to_path
+    )
 
     speeches_block = _format_speeches_section(go)
     spawns_block = _format_spawns_section(
@@ -441,6 +446,7 @@ def _build_attacks_section_wikitext(
     projs: list,
     version: str,
     status_effect_icons: dict[str, str] | None,
+    status_effect_name_to_path: dict[str, str] | None = None,
 ) -> str:
     if not projs:
         return ""
@@ -490,7 +496,9 @@ def _build_attacks_section_wikitext(
             other.append(f"Multi-hit {fmt_num(p.get('MaxHitsPerEntity'))}")
         if p.get("Pierces"):
             other.append("Pierces")
-        status_txt = _format_status_effects(p.get("StatusEffects"), status_effect_icons)
+        status_txt = _format_status_effects(
+            p.get("StatusEffects"), status_effect_icons, status_effect_name_to_path
+        )
         other_txt = "<br>".join(other)
         dmg_plain = fmt_range(dmg.get("Min"), dmg.get("Max"))
         has_image = has_image or bool(str(pw).strip())
@@ -561,7 +569,24 @@ def _status_effect_name_key(name: object) -> str:
     return str(name).strip().upper().replace(" ", "_")
 
 
-def _format_immunities(raw: object, icon_map: dict[str, str] | None) -> str:
+def _status_icon(name: str, icon_map: dict[str, str] | None) -> str:
+    if not icon_map:
+        return ""
+    return icon_map.get(name.lower(), "")
+
+
+def _status_effect_wikilink(display_name: str, name_to_path: dict[str, str] | None) -> str:
+    path = (name_to_path or {}).get(str(display_name).strip().lower())
+    if path:
+        return f"[[{path}|{display_name}]]"
+    return str(display_name)
+
+
+def _format_immunities(
+    raw: object,
+    icon_map: dict[str, str] | None,
+    name_to_path: dict[str, str] | None = None,
+) -> str:
     """List immune status effects with icons (dump: Immunity: { \"Bleeding\": true, ... } or [])."""
     if raw is None:
         return ""
@@ -575,17 +600,24 @@ def _format_immunities(raw: object, icon_map: dict[str, str] | None) -> str:
     parts: list[str] = []
     for n in names:
         icon = _status_icon(n, icon_map)
-        parts.append(f"{icon} {n}".strip())
+        link = _status_effect_wikilink(n, name_to_path)
+        parts.append(f"{icon} {link}".strip())
     return "<br>".join(parts)
 
 
-def _format_status_effects(raw: object, icon_map: dict[str, str] | None) -> str:
+def _format_status_effects(
+    raw: object,
+    icon_map: dict[str, str] | None,
+    name_to_path: dict[str, str] | None = None,
+) -> str:
     if not raw:
         return ""
     if isinstance(raw, dict):
         out: list[str] = []
         for name, spec in raw.items():
-            icon = _status_icon(str(name), icon_map)
+            name_s = str(name)
+            icon = _status_icon(name_s, icon_map)
+            link = _status_effect_wikilink(name_s, name_to_path)
             if isinstance(spec, dict):
                 parts = []
                 omit_intensity = _status_effect_name_key(name) in _STATUS_EFFECTS_OMIT_INTENSITY
@@ -594,11 +626,11 @@ def _format_status_effects(raw: object, icon_map: dict[str, str] | None) -> str:
                 if spec.get("Duration") is not None:
                     parts.append(f"duration {fmt_num(spec.get('Duration'))}s")
                 if parts:
-                    out.append(f"{icon} {name} ({', '.join(parts)})".strip())
+                    out.append(f"{icon} {link} ({', '.join(parts)})".strip())
                 else:
-                    out.append(f"{icon} {name}".strip())
+                    out.append(f"{icon} {link}".strip())
             else:
-                out.append(f"{icon} {name}: {spec}".strip())
+                out.append(f"{icon} {link}: {spec}".strip())
         return "<br>".join(out)
     if isinstance(raw, list):
         out: list[str] = []
@@ -606,13 +638,17 @@ def _format_status_effects(raw: object, icon_map: dict[str, str] | None) -> str:
             if isinstance(e, dict):
                 n = e.get("Name") or e.get("Type") or e.get("Effect")
                 if n:
-                    icon = _status_icon(str(n), icon_map)
-                    out.append(f"{icon} {n}".strip())
+                    n = str(n)
+                    icon = _status_icon(n, icon_map)
+                    link = _status_effect_wikilink(n, name_to_path)
+                    out.append(f"{icon} {link}".strip())
                 else:
                     out.append(str(e))
             else:
-                icon = _status_icon(str(e), icon_map)
-                out.append(f"{icon} {e}".strip())
+                es = str(e)
+                icon = _status_icon(es, icon_map)
+                link = _status_effect_wikilink(es, name_to_path)
+                out.append(f"{icon} {link}".strip())
         return ", ".join(out)
     return str(raw)
 
@@ -655,12 +691,6 @@ def _aoe_marker(color: object) -> str:
         f'border-radius:50%;background:rgb({r},{g},{b});border:1px solid #222"></span>'
     )
     return f'<span style="{style}">{dot}<span>(AOE)</span></span>'
-
-
-def _status_icon(name: str, icon_map: dict[str, str] | None) -> str:
-    if not icon_map:
-        return ""
-    return icon_map.get(name.lower(), "")
 
 
 def _drop_icon_for_entry(
