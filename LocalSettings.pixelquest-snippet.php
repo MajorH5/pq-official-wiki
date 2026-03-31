@@ -15,3 +15,11 @@ $wgGroupPermissions['sysop']['deletedhistory'] = true;   // view deleted history
 $wgGroupPermissions['sysop']['deletedtext'] = true;       // view suppressed deleted text
 $wgGroupPermissions['sysop']['viewsuppressed'] = true;   // view suppressed content where applicable
 
+// --- MobileFrontend (mobile view / Minerva skin) ---
+// Extension files are baked into the Docker image (mediawiki/Dockerfile stage); just load it here.
+wfLoadExtension( 'MobileFrontend' );
+// Auto-detect mobile devices and show the mobile view.
+$wgMFAutodetectMobileView = true;
+// Use MinervaNeue as the mobile skin class (already loaded in LocalSettings.php).
+$wgMFDefaultSkinClass = 'SkinMinerva';
+

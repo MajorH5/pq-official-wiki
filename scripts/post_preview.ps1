@@ -1,17 +1,3 @@
-<# 
-POST a datadump to the wiki bot preview endpoint (dry-run diff generator).
-
-Usage:
-  .\post_preview.ps1 [dump.json]
-  .\post_preview.ps1 --prod [dump.json]
-
-Env:
-  $env:DATADUMP_INGEST_SECRET   (required) shared secret for auth
-  $env:PREVIEW_URL             (optional) override full preview URL
-  $env:PREVIEW_MAX_CHANGES    (optional) default: 50
-  $env:PREVIEW_MAX_DIFF_CHARS (optional) default: 50000
-#>
-
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -53,7 +39,12 @@ if ($Prod) {
     $UrlBase = "http://localhost:8081/preview"
 }
 
-$Url = "$UrlBase?max_changes=$MaxChanges&max_diff_chars=$MaxDiffChars"
+# Guard against bad PREVIEW_URL values (e.g. "=50"); fall back to localhost.
+if (-not $UrlBase -or -not ($UrlBase -like "http*")) {
+    $UrlBase = "http://localhost:8081/preview"
+}
+
+$Url = "$UrlBase`?max_changes=$MaxChanges&max_diff_chars=$MaxDiffChars"
 
 Write-Host "POSTing $Dump to $Url ..."
 $body = Get-Content $Dump -Raw

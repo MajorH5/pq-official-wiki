@@ -112,6 +112,7 @@ def load_overrides() -> dict[str, Any]:
             "items": set(),
             "locations": set(),
             "entities": set(),
+            "biomes": set(),
             "skins": set(),
             "badges": set(),
             "achievements": set(),
@@ -121,6 +122,7 @@ def load_overrides() -> dict[str, Any]:
             "items": set(),
             "locations": set(),
             "entities": set(),
+            "biomes": set(),
             "skins": set(),
             "badges": set(),
             "achievements": set(),
@@ -138,7 +140,7 @@ def load_overrides() -> dict[str, Any]:
         block = raw.get(section) if isinstance(raw, dict) else None
         if not isinstance(block, dict):
             continue
-        for kind in ("items", "locations", "entities", "skins", "badges", "achievements"):
+        for kind in ("items", "locations", "entities", "biomes", "skins", "badges", "achievements", "quests"):
             defaults[section][kind] = _as_int_set(block.get(kind))
     if isinstance(raw, dict) and "show_hidden_achievements" in raw:
         defaults["show_hidden_achievements"] = _as_int_set(raw.get("show_hidden_achievements"))
@@ -237,6 +239,7 @@ def run_import(
     skip_items = overrides["skip"]["items"]
     skip_locations = overrides["skip"]["locations"]
     skip_entities = overrides["skip"]["entities"]
+    skip_biomes = overrides["skip"]["biomes"]
     skip_skins = overrides["skip"]["skins"]
     skip_badges = overrides["skip"]["badges"]
     skip_achievements = overrides["skip"]["achievements"]
@@ -244,6 +247,7 @@ def run_import(
     unreleased_items = overrides["unreleased"]["items"]
     unreleased_locations = overrides["unreleased"]["locations"]
     unreleased_entities = overrides["unreleased"]["entities"]
+    unreleased_biomes = overrides["unreleased"]["biomes"]
     unreleased_skins = overrides["unreleased"]["skins"]
     unreleased_badges = overrides["unreleased"]["badges"]
     unreleased_achievements = overrides["unreleased"]["achievements"]
@@ -252,6 +256,7 @@ def run_import(
 
     items = [it for it in items if int(it.get("Id", -1)) not in skip_items]
     locations = [loc for loc in locations if int(loc.get("Id", -1)) not in skip_locations]
+    biomes = [b for b in biomes if int(b.get("Id", -1)) not in skip_biomes]
     game_objects = [
         go
         for go in game_objects

@@ -109,6 +109,9 @@
       579,
       254
     ],
+    "biomes": [
+      
+    ],
     "badges": [],
     "achievements": [],
     "skins": [
@@ -132,6 +135,7 @@
     "entities": [
 
     ],
+    "biomes": [],
     "skins": [],
     "badges": [],
     "achievements": []

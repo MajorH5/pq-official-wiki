@@ -19,7 +19,9 @@ RUN apk add --no-cache git ca-certificates \
 	&& git clone --depth 1 -b REL1_43 https://github.com/wikimedia/mediawiki-extensions-Lockdown.git /Lockdown \
 	&& test -f /Lockdown/extension.json \
 	&& git clone --depth 1 -b REL1_43 https://github.com/wikimedia/mediawiki-extensions-TemplateStyles.git /TemplateStyles \
-	&& test -f /TemplateStyles/extension.json
+	&& test -f /TemplateStyles/extension.json \
+	&& git clone --depth 1 -b REL1_43 https://github.com/wikimedia/mediawiki-extensions-MobileFrontend.git /MobileFrontend \
+	&& test -f /MobileFrontend/extension.json
 
 FROM mediawiki:lts
 
@@ -29,6 +31,7 @@ COPY --from=ext-src --chown=www-data:www-data /WikiSEO /var/www/html/extensions/
 COPY --from=ext-src --chown=www-data:www-data /CheckUser /var/www/html/extensions/CheckUser
 COPY --from=ext-src --chown=www-data:www-data /Lockdown /var/www/html/extensions/Lockdown
 COPY --from=ext-src --chown=www-data:www-data /TemplateStyles /var/www/html/extensions/TemplateStyles
+COPY --from=ext-src --chown=www-data:www-data /MobileFrontend /var/www/html/extensions/MobileFrontend
 
 # Fail the build if copies are missing (catches bad cache / broken COPY)
 RUN test -f /var/www/html/extensions/EmbedVideo/extension.json \
@@ -36,7 +39,8 @@ RUN test -f /var/www/html/extensions/EmbedVideo/extension.json \
 	&& test -f /var/www/html/extensions/WikiSEO/extension.json \
 	&& test -f /var/www/html/extensions/CheckUser/extension.json \
 	&& test -f /var/www/html/extensions/Lockdown/extension.json \
-	&& test -f /var/www/html/extensions/TemplateStyles/extension.json
+	&& test -f /var/www/html/extensions/TemplateStyles/extension.json \
+	&& test -f /var/www/html/extensions/MobileFrontend/extension.json
 
 
 # Pixel Quest: Roblox linking + profiles (from this repo)
