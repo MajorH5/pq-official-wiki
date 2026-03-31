@@ -95,10 +95,20 @@ final class PqRobloxLookupIndex {
 
 	private function __construct() {
 		$path = PqRobloxConfig::getDataDumpPath();
-		if ( !is_readable( $path ) ) {
+		// Be defensive: env/config can accidentally point to a directory.
+		// If so, try "<dir>/pq-datadump.json" before giving up.
+		if ( is_dir( $path ) ) {
+			$candidate = rtrim( $path, '/\\' ) . '/pq-datadump.json';
+			if ( is_file( $candidate ) && is_readable( $candidate ) ) {
+				$path = $candidate;
+			} else {
+				return;
+			}
+		}
+		if ( !is_file( $path ) || !is_readable( $path ) ) {
 			return;
 		}
-		$raw = file_get_contents( $path );
+		$raw = @file_get_contents( $path );
 		if ( $raw === false ) {
 			return;
 		}

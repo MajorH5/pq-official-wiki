@@ -69,6 +69,21 @@ from pq_wiki.status_effect_icons import build_status_effect_icon_wikitext_map
 from pq_wiki.valor_icon import build_valor_icon_wikitext
 from pq_wiki.wiki_assets import ensure_pixel_art_css
 
+SUPPORTED_IMPORT_KINDS: frozenset[str] = frozenset(
+    {
+        "items",
+        "locations",
+        "biomes",
+        "entities",
+        "skins",
+        "account_stats",
+        "badges",
+        "achievements",
+        "quests",
+        "status_effects",
+    }
+)
+
 
 def load_json(path: Path) -> dict[str, Any]:
     with path.open(encoding="utf-8") as f:
@@ -188,6 +203,7 @@ def run_import(
     force: bool = False,
     *,
     dry_run: bool = False,
+    only_kinds: set[str] | None = None,
 ) -> dict[str, Any]:
     log = get_import_logger()
     ensure_dirs()
@@ -200,9 +216,20 @@ def run_import(
     render_fp = compute_render_fingerprint()
     prev = read_last_version()
     effective_force = force or FORCE_OVERWRITE
+    selected_kinds: set[str] | None = None
+    if only_kinds:
+        selected_kinds = {k for k in only_kinds if k in SUPPORTED_IMPORT_KINDS}
+        if not selected_kinds:
+            raise ValueError(
+                "only_kinds provided but no valid kinds selected. "
+                f"Supported: {sorted(SUPPORTED_IMPORT_KINDS)}"
+            )
+    scoped_run = selected_kinds is not None and selected_kinds != set(SUPPORTED_IMPORT_KINDS)
 
     if FORCE_OVERWRITE:
         log.info("FORCE_OVERWRITE=1: overriding same-version guard and page ownership checks")
+    if selected_kinds is not None:
+        log.info("Scoped import kinds: %s", sorted(selected_kinds))
 
     log.info("Starting import datadump version=%s (previous=%s)", version, prev)
     from pq_wiki.config import ROBLOX_COOKIE
@@ -624,6 +651,26 @@ def run_import(
     achievements_work = _work_list(achievements_to_process, ca)
     quests_work = _work_list(quests_to_process, cq)
 
+    if selected_kinds is not None:
+        if "items" not in selected_kinds:
+            items_work = []
+        if "locations" not in selected_kinds:
+            locations_work = []
+        if "biomes" not in selected_kinds:
+            biomes_work = []
+        if "entities" not in selected_kinds:
+            entities_work = []
+        if "skins" not in selected_kinds:
+            skins_work = []
+        if "account_stats" not in selected_kinds:
+            account_stats_work = []
+        if "badges" not in selected_kinds:
+            badges_work = []
+        if "achievements" not in selected_kinds:
+            achievements_work = []
+        if "quests" not in selected_kinds:
+            quests_work = []
+
     def _one(
         kind: str,
         title: str,
@@ -671,7 +718,7 @@ def run_import(
             errors.append(f"{kind} {title}")
             log.error("FAILED %s%s %s\n%s", prefix, kind, title, traceback.format_exc())
 
-    if import_full or cfx:
+    if (import_full or cfx) and (selected_kinds is None or "status_effects" in selected_kinds):
         def build_status_effects_index():
             return build_status_effects_index_wikitext(site, status_effects_rows, data, version)
 
@@ -963,7 +1010,7 @@ def run_import(
             progress=f"{idx}/{n_qu}",
         )
 
-    if not errors and not dry_run:
+    if not errors and not dry_run and not scoped_run:
         write_cached_datadump(datadump_path)
         write_last_import_state(
             datadump_version=version,
@@ -972,7 +1019,12 @@ def run_import(
         )
         write_last_version(version)
     else:
-        log.warning("Not updating cached datadump / import state because of errors")
+        if errors:
+            log.warning("Not updating cached datadump / import state because of errors")
+        elif dry_run:
+            log.info("Dry-run mode: not updating cached datadump / import state")
+        elif scoped_run:
+            log.info("Scoped import mode: not updating cached datadump / import state")
     log.info(
         "If saved edits do not appear: hard-refresh the tab, or open the article with "
         "?action=purge — MediaWiki and the browser both cache rendered HTML. "

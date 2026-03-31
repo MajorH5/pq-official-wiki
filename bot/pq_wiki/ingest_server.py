@@ -36,6 +36,14 @@ def _auth_ok() -> bool:
     return False
 
 
+def _parse_kinds_arg() -> set[str] | None:
+    raw = request.args.get("kinds", "")
+    if not raw:
+        return None
+    out = {p.strip().lower() for p in raw.split(",") if p.strip()}
+    return out or None
+
+
 @app.route("/health", methods=["GET"])
 def health():
     return {"status": "ok"}
@@ -71,11 +79,12 @@ def ingest():
         return {"ok": False, "error": "expected JSON body or multipart file field 'file'"}, 400
 
     force = request.args.get("force") in ("1", "true", "yes")
+    only_kinds = _parse_kinds_arg()
 
     def _run():
         log = get_import_logger()
         try:
-            out = run_import(path, force=force)
+            out = run_import(path, force=force, only_kinds=only_kinds)
             log.info("Background import result: %s", out)
         except Exception:
             log.error("Background import crashed:\n%s", traceback.format_exc())
@@ -127,6 +136,7 @@ def preview():
         return {"ok": False, "error": "expected JSON body or multipart file field 'file'"}, 400
 
     force = request.args.get("force") in ("1", "true", "yes")
+    only_kinds = _parse_kinds_arg()
     max_changes = int(request.args.get("max_changes", "50"))
     max_diff_chars = int(request.args.get("max_diff_chars", "50000"))
 
@@ -201,7 +211,7 @@ def preview():
 
     try:
         ir.save_bot_page = save_bot_page_preview
-        out = run_import(path, force=force, dry_run=True)
+        out = run_import(path, force=force, dry_run=True, only_kinds=only_kinds)
         return {"ok": True, "import": out, "changes": changes, "count": len(changes)}
     except Exception as e:
         get_import_logger().error("Preview crashed: %s\n%s", e, traceback.format_exc())

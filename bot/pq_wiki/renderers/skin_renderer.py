@@ -73,6 +73,7 @@ def _upload_skin_animation_gif(
     data = normalize_gif_bytes_for_imagemagick(data)
     sz = anim.get("Size") or {}
     fw = int(sz.get("X") or sz.get("x") or 50)
+    fh = int(sz.get("Y") or sz.get("y") or fw)
     sid = int(skin.get("Id") or 0)
     sname = str(skin.get("Name") or f"Skin {sid}")
     w = upload_raw_bytes_named(
@@ -81,7 +82,7 @@ def _upload_skin_animation_gif(
         "gif",
         skin_animation_base(sid, sname, anim_key),
         version,
-        thumb_size=max(1, fw),
+        thumb_size=max(1, max(fw, fh)),
     )
     return w
 

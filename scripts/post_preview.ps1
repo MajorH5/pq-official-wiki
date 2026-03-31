@@ -4,10 +4,15 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location (Join-Path $ScriptDir "..")
 
 $Prod = $false
+$Kinds = $null
 $Rest = [System.Collections.ArrayList]@()
-foreach ($a in $args) {
+for ($i = 0; $i -lt $args.Count; $i++) {
+    $a = $args[$i]
     if ($a -eq "--prod") {
         $Prod = $true
+    } elseif ($a -eq "--kinds" -and ($i + 1) -lt $args.Count) {
+        $i++
+        $Kinds = $args[$i]
     } else {
         [void]$Rest.Add($a)
     }
@@ -45,6 +50,9 @@ if (-not $UrlBase -or -not ($UrlBase -like "http*")) {
 }
 
 $Url = "$UrlBase`?max_changes=$MaxChanges&max_diff_chars=$MaxDiffChars"
+if ($Kinds) {
+    $Url = "$Url&kinds=$Kinds"
+}
 
 Write-Host "POSTing $Dump to $Url ..."
 $body = Get-Content $Dump -Raw
