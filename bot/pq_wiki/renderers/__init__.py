@@ -5,6 +5,7 @@ from pq_wiki.renderers.biome_renderer import build_biome_wikitext
 from pq_wiki.renderers.entity_renderer import build_entity_wikitext
 from pq_wiki.renderers.item_renderer import build_item_wikitext
 from pq_wiki.renderers.location_renderer import build_location_wikitext
+from pq_wiki.renderers.quest_renderer import build_quest_wikitext
 from pq_wiki.renderers.pathing import (
     STATUS_EFFECTS_INDEX_TITLE,
     account_stat_page_path,
@@ -14,6 +15,7 @@ from pq_wiki.renderers.pathing import (
     entity_page_path,
     item_page_path,
     location_page_path,
+    quest_page_path,
     skin_page_path,
     status_effect_wikilink_path,
 )
@@ -33,6 +35,7 @@ __all__ = [
     "build_entity_wikitext",
     "build_item_wikitext",
     "build_location_wikitext",
+    "build_quest_wikitext",
     "build_skin_wikitext",
     "build_status_effect_name_to_path_map",
     "build_status_effects_index_wikitext",
@@ -43,6 +46,7 @@ __all__ = [
     "entity_page_path",
     "item_page_path",
     "location_page_path",
+    "quest_page_path",
     "skin_page_path",
     "save_bot_page",
     "status_effect_wikilink_path",

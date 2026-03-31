@@ -1,0 +1,13 @@
+<noinclude>
+'''Quest layout''' — transcluded by quest pages. Bot fills named parameters.
+</noinclude>{{{icon|}}}
+
+{{{desc|}}}
+
+{{{details|}}}
+
+{{{rewards|}}}
+
+{{{extra|}}}
+
+{{{categories|}}}

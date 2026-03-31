@@ -52,12 +52,14 @@ from pq_wiki.render_pages import (
     build_entity_wikitext,
     build_item_wikitext,
     build_location_wikitext,
+    build_quest_wikitext,
     build_skin_wikitext,
     build_status_effect_name_to_path_map,
     build_status_effects_index_wikitext,
     entity_page_path,
     item_page_path,
     location_page_path,
+    quest_page_path,
     save_bot_page,
     skin_page_path,
 )
@@ -113,6 +115,7 @@ def load_overrides() -> dict[str, Any]:
             "skins": set(),
             "badges": set(),
             "achievements": set(),
+            "quests": set(),
         },
         "unreleased": {
             "items": set(),
@@ -121,6 +124,7 @@ def load_overrides() -> dict[str, Any]:
             "skins": set(),
             "badges": set(),
             "achievements": set(),
+            "quests": set(),
         },
         "show_hidden_achievements": set(),
     }
@@ -143,7 +147,16 @@ def load_overrides() -> dict[str, Any]:
 
 def _warn_missing_layout_templates(site: pywikibot.Site, log) -> None:
     """If layout templates are missing, item pages show raw {{PQ Item|...}} instead of rendering."""
-    for short in ("PQ Item", "PQ Entity", "PQ Location", "PQ Biome", "PQ Skin", "PQ Badge", "PQ Achievement"):
+    for short in (
+        "PQ Item",
+        "PQ Entity",
+        "PQ Location",
+        "PQ Biome",
+        "PQ Skin",
+        "PQ Badge",
+        "PQ Achievement",
+        "PQ Quest",
+    ):
         title = f"Template:{short}"
         p = pywikibot.Page(site, title)
         try:
@@ -221,12 +234,14 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
     skip_skins = overrides["skip"]["skins"]
     skip_badges = overrides["skip"]["badges"]
     skip_achievements = overrides["skip"]["achievements"]
+    skip_quests = overrides["skip"]["quests"]
     unreleased_items = overrides["unreleased"]["items"]
     unreleased_locations = overrides["unreleased"]["locations"]
     unreleased_entities = overrides["unreleased"]["entities"]
     unreleased_skins = overrides["unreleased"]["skins"]
     unreleased_badges = overrides["unreleased"]["badges"]
     unreleased_achievements = overrides["unreleased"]["achievements"]
+    unreleased_quests = overrides["unreleased"]["quests"]
     show_hidden_achievements = overrides.get("show_hidden_achievements") or set()
 
     items = [it for it in items if int(it.get("Id", -1)) not in skip_items]
@@ -259,6 +274,18 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
             continue
         achievements.append(a)
 
+    quests_raw = data.get("Quests") or []
+    if not isinstance(quests_raw, list):
+        quests_raw = []
+    quests: list[dict[str, Any]] = []
+    for q in quests_raw:
+        if not isinstance(q, dict):
+            continue
+        qid = int(q.get("Id", -1))
+        if qid in skip_quests:
+            continue
+        quests.append(q)
+
     status_effects_raw = data.get("StatusEffects") or []
     if not isinstance(status_effects_raw, list):
         status_effects_raw = []
@@ -276,9 +303,13 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
     if not isinstance(achievement_groups, dict):
         achievement_groups = None
 
+    quest_categories = data.get("QuestCategories")
+    if not isinstance(quest_categories, dict):
+        quest_categories = None
+
     log.info(
-        "Overrides loaded: skip(items=%d,locations=%d,entities=%d,skins=%d,badges=%d,achievements=%d) "
-        "unreleased(items=%d,locations=%d,entities=%d,skins=%d,badges=%d,achievements=%d) "
+        "Overrides loaded: skip(items=%d,locations=%d,entities=%d,skins=%d,badges=%d,achievements=%d,quests=%d) "
+        "unreleased(items=%d,locations=%d,entities=%d,skins=%d,badges=%d,achievements=%d,quests=%d) "
         "show_hidden_achievements=%d",
         len(skip_items),
         len(skip_locations),
@@ -286,12 +317,14 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
         len(skip_skins),
         len(skip_badges),
         len(skip_achievements),
+        len(skip_quests),
         len(unreleased_items),
         len(unreleased_locations),
         len(unreleased_entities),
         len(unreleased_skins),
         len(unreleased_badges),
         len(unreleased_achievements),
+        len(unreleased_quests),
         len(show_hidden_achievements),
     )
 
@@ -325,11 +358,12 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
     account_stats_to_process = account_stats[:nlim] if nlim else account_stats
     badges_to_process = badges[:nlim] if nlim else badges
     achievements_to_process = achievements[:nlim] if nlim else achievements
+    quests_to_process = quests[:nlim] if nlim else quests
 
     if nlim:
         log.info(
             "GENERATE_FEW_PAGES cap %d per type: importing %d items, %d locations, %d biomes, "
-            "%d entities, %d skins, %d account stats (status effects: always one combined index, %d sections)",
+            "%d entities, %d skins, %d account stats, %d quests (status effects: always one combined index, %d sections)",
             nlim,
             len(items_to_process),
             len(locations_to_process),
@@ -337,6 +371,7 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
             len(entities_to_process),
             len(skins_to_process),
             len(account_stats_to_process),
+            len(quests_to_process),
             len(status_effects_rows),
         )
 
@@ -436,6 +471,15 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
         base = biome_page_path(bio, used_paths_public)
         biome_id_to_path[bid] = base
 
+    biomes_by_id: dict[int, dict[str, Any]] = {}
+    for b in biomes:
+        if not isinstance(b, dict) or b.get("Id") is None:
+            continue
+        try:
+            biomes_by_id[int(b["Id"])] = b
+        except (TypeError, ValueError):
+            continue
+
     item_drop_sources = build_item_id_to_drop_sources(
         game_objects,
         item_name_to_id,
@@ -478,11 +522,22 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
         base = achievement_page_path(ach, used)
         achievement_id_to_path[aid] = _with_unreleased_namespace(base, is_unreleased)
 
+    quest_id_to_path: dict[int, str] = {}
+    for qu in sorted(quests, key=lambda x: int(x["Id"])):
+        qid = int(qu["Id"])
+        is_unreleased = qid in unreleased_quests
+        used = used_paths_unreleased if is_unreleased else used_paths_public
+        base = quest_page_path(qu, used)
+        quest_id_to_path[qid] = _with_unreleased_namespace(base, is_unreleased)
+
     status_effect_name_to_path = build_status_effect_name_to_path_map(status_effects_rows)
 
     badges_for_diff = [b for b in badges_raw if isinstance(b, dict) and int(b.get("Id", 0)) >= 0]
     achievements_for_diff = [
         a for a in achievements_raw if isinstance(a, dict) and int(a.get("Id", 0)) >= 0
+    ]
+    quests_for_diff = [
+        q for q in quests_raw if isinstance(q, dict) and int(q.get("Id", 0)) >= 0
     ]
 
     old_cached = load_cached_datadump()
@@ -494,6 +549,7 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
     cs: set[int] = set()
     cb: set[int] = set()
     ca: set[int] = set()
+    cq: set[int] = set()
     cfx: set[int] = set()
     import_full = (
         old_cached is None
@@ -506,7 +562,7 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
             "Full wiki rebuild (no/partial cache, render fingerprint changed, PQ_IMPORT_FULL, or --force)",
         )
     else:
-        ci, cl, cbi, ce, cs, cb, ca, cfx = compute_incremental_sets(
+        ci, cl, cbi, ce, cs, cb, ca, cq, cfx = compute_incremental_sets(
             old_data=old_cached,
             new_items=items,
             new_locations=locations,
@@ -515,12 +571,13 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
             new_character_skins=character_skins,
             new_badges=badges_for_diff,
             new_achievements=achievements_for_diff,
+            new_quests=quests_for_diff,
             new_status_effects=status_effects_rows,
             unreleased_entities=unreleased_entities,
         )
         log.info(
             "Incremental scope: %d items, %d locations, %d biomes, %d entities, %d skins, %d badges, "
-            "%d achievements, %d status effect rows changed (index page if any)",
+            "%d achievements, %d quests, %d status effect rows changed (index page if any)",
             len(ci),
             len(cl),
             len(cbi),
@@ -528,9 +585,10 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
             len(cs),
             len(cb),
             len(ca),
+            len(cq),
             len(cfx),
         )
-        if not ci and not cl and not cbi and not ce and not cs and not cb and not ca and not cfx:
+        if not ci and not cl and not cbi and not ce and not cs and not cb and not ca and not cq and not cfx:
             log.info("Incremental diff: no page updates needed (wikitext would be unchanged)")
 
     stats: dict[str, int] = {}
@@ -553,6 +611,7 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
     account_stats_work = account_stats_to_process
     badges_work = _work_list(badges_to_process, cb)
     achievements_work = _work_list(achievements_to_process, ca)
+    quests_work = _work_list(quests_to_process, cq)
 
     def _one(
         kind: str,
@@ -855,6 +914,44 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
             progress=f"{idx}/{n_ach}",
         )
 
+    n_qu = len(quests_work)
+    for idx, qu in enumerate(quests_work, start=1):
+        path = quest_id_to_path[int(qu["Id"])]
+
+        def build_qu(q=qu):
+            return build_quest_wikitext(
+                site,
+                q,
+                data,
+                version,
+                quest_categories=quest_categories,
+                item_id_to_path=item_id_to_path,
+                item_id_to_item=item_id_to_item,
+                item_name_to_id=item_name_to_id,
+                items_list=items,
+                stat_icons=stat_icons,
+                valor_icon_wikitext=valor_icon_wikitext,
+                honor_icon_map=honor_icon_map,
+                location_id_to_path=location_id_to_path,
+                location_name_to_path=location_name_to_path,
+                location_id_to_loc=location_id_to_loc,
+                entity_id_to_path=entity_id_to_path,
+                entity_id_to_go=entity_id_to_go,
+                biome_id_to_path=biome_id_to_path,
+                biomes_by_id=biomes_by_id,
+            )
+
+        def save_qu(s, ttl, txt, ver, user, k):
+            return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=FORCE_OVERWRITE)
+
+        _one(
+            "quest",
+            path,
+            build_qu,
+            save_qu,
+            progress=f"{idx}/{n_qu}",
+        )
+
     if not errors:
         write_cached_datadump(datadump_path)
         write_last_import_state(
@@ -891,6 +988,7 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
         "incremental_locations": len(cl) if not import_full else None,
         "incremental_biomes": len(cbi) if not import_full else None,
         "incremental_entities": len(ce) if not import_full else None,
+        "incremental_quests": len(cq) if not import_full else None,
     }
 
 

@@ -167,12 +167,40 @@ def format_reward_cell_wikitext(
         if val is not None:
             try:
                 f = float(val)
-                pct = _pct_from_fraction(f)
-                parts.append(_stat_icon_wikitext(stat_icons, "experience", f"{pct} experience"))
+                sign = "+" if f > 0 else ("-" if f < 0 else "")
+                label = f"{sign}{abs(f):g} EXP"
+                parts.append(_stat_icon_wikitext(stat_icons, "experience", label))
             except (TypeError, ValueError):
                 parts.append(str(val))
         else:
             parts.append("Experience boost")
+
+    elif rtype == "Choice":
+        val = reward.get("Value")
+        if isinstance(val, list):
+            sub: list[str] = []
+            for ch in val:
+                if isinstance(ch, dict):
+                    sub.append(
+                        format_reward_cell_wikitext(
+                            ch,
+                            item_id_to_path=item_id_to_path,
+                            item_id_to_item=item_id_to_item,
+                            item_name_to_id=item_name_to_id,
+                            stat_icons=stat_icons,
+                            valor_icon_wikitext=valor_icon_wikitext,
+                            honor_bronze_icon_wikitext=honor_bronze_icon_wikitext,
+                            lucky_clover_item_id=lucky_clover_item_id,
+                            mastery_weapon_item=mastery_weapon_item,
+                            location_id_to_path=location_id_to_path,
+                            location_name_to_path=location_name_to_path,
+                        )
+                    )
+                else:
+                    sub.append(str(ch))
+            parts.append("Choose one: " + " '''or''' ".join(sub))
+        else:
+            parts.append("Choice reward")
 
     else:
         parts.append(f"'''{rtype}''': {reward.get('Value', '')}")

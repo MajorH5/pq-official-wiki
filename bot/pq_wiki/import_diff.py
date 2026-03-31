@@ -41,6 +41,8 @@ _RENDER_CODE_PATHS: tuple[Path, ...] = (
     BOT_ROOT / "pq_wiki" / "renderers" / "skin_renderer.py",
     BOT_ROOT / "pq_wiki" / "renderers" / "badge_renderer.py",
     BOT_ROOT / "pq_wiki" / "renderers" / "achievement_renderer.py",
+    BOT_ROOT / "pq_wiki" / "renderers" / "quest_renderer.py",
+    BOT_ROOT / "pq_wiki" / "quest_helpers.py",
     BOT_ROOT / "pq_wiki" / "renderers" / "shared.py",
     BOT_ROOT / "pq_wiki" / "wikitext_util.py",
     BOT_ROOT / "pq_wiki" / "reward_wikitext.py",
@@ -244,6 +246,25 @@ def diff_achievement_ids(
     return changed
 
 
+def diff_quest_ids(
+    old_data: dict[str, Any],
+    new_quests: list[dict[str, Any]],
+) -> set[int]:
+    old_q = old_data.get("Quests") or []
+    if not isinstance(old_q, list):
+        old_q = []
+    new_idx = _index_by_id(new_quests)
+    old_idx = _index_by_id(list(old_q))
+    changed: set[int] = set()
+    for qid, row in new_idx.items():
+        if qid not in old_idx:
+            changed.add(qid)
+            continue
+        if _object_hash(row) != _object_hash(old_idx[qid]):
+            changed.add(qid)
+    return changed
+
+
 def diff_status_effect_ids(
     old_data: dict[str, Any],
     new_rows: list[dict[str, Any]],
@@ -402,10 +423,11 @@ def compute_incremental_sets(
     new_character_skins: list[dict[str, Any]],
     new_badges: list[dict[str, Any]],
     new_achievements: list[dict[str, Any]],
+    new_quests: list[dict[str, Any]],
     new_status_effects: list[dict[str, Any]],
     unreleased_entities: set[int],
-) -> tuple[set[int], set[int], set[int], set[int], set[int], set[int], set[int], set[int]]:
-    """Returns changed ids: items, locations, biomes, entities, skins, badges, achievements, status effects."""
+) -> tuple[set[int], set[int], set[int], set[int], set[int], set[int], set[int], set[int], set[int]]:
+    """Returns changed ids: items, locations, biomes, entities, skins, badges, achievements, quests, status effects."""
     ci = diff_item_ids(
         old_data,
         new_items,
@@ -418,5 +440,6 @@ def compute_incremental_sets(
     cs = diff_skin_ids(old_data, new_character_skins)
     cb = diff_badge_ids(old_data, new_badges)
     ca = diff_achievement_ids(old_data, new_achievements)
+    cq = diff_quest_ids(old_data, new_quests)
     cfx = diff_status_effect_ids(old_data, new_status_effects)
-    return ci, cl, cbi, ce, cs, cb, ca, cfx
+    return ci, cl, cbi, ce, cs, cb, ca, cq, cfx

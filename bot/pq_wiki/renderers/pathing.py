@@ -114,6 +114,14 @@ def achievement_page_path(ach: dict, used_paths: set[str] | None = None) -> str:
     return _claim_unique_title(ach.get("Name"), fb, aid, used_paths)
 
 
+def quest_page_path(quest: dict, used_paths: set[str] | None = None) -> str:
+    qid = int(quest["Id"])
+    fb = f"Quest {qid}"
+    if used_paths is None:
+        return _clean_title(quest.get("Name"), fb)
+    return _claim_unique_title(quest.get("Name"), fb, qid, used_paths)
+
+
 # Bot emits one article; sections use == headings ==. Links: [[Status effects#Fragment|Name]].
 STATUS_EFFECTS_INDEX_TITLE = "Status effects"
 

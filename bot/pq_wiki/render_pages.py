@@ -11,12 +11,14 @@ from pq_wiki.renderers import (
     build_entity_wikitext,
     build_item_wikitext,
     build_location_wikitext,
+    build_quest_wikitext,
     build_skin_wikitext,
     build_status_effect_name_to_path_map,
     build_status_effects_index_wikitext,
     entity_page_path,
     item_page_path,
     location_page_path,
+    quest_page_path,
     save_bot_page,
     skin_page_path,
 )
@@ -40,6 +42,7 @@ __all__ = [
     "entity_page_path",
     "item_page_path",
     "location_page_path",
+    "quest_page_path",
     "skin_page_path",
     "save_bot_page",
 ]

@@ -9,6 +9,7 @@ from PIL import Image
 
 from pq_wiki import sprites
 from pq_wiki.config import TEXTURE_CACHE_DIR, ensure_dirs
+from pq_wiki.texture_names import projectile_sprite_cache_key, projectile_sprite_upload_basename
 from pq_wiki.sprites import (
     get_texture_url,
     normalize_gif_bytes_for_imagemagick,

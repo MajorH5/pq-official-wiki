@@ -1,14 +1,33 @@
 # POST a datadump to the ingest endpoint.
-# Usage: .\post_dump.ps1 [dump.json]
+# Usage:
+#   .\post_dump.ps1 [dump.json]
+#   .\post_dump.ps1 --prod [dump.json]
 # Env: $env:DATADUMP_INGEST_SECRET
+#      $env:INGEST_URL (optional; default http://localhost:8081/ingest; ignored when --prod)
 
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location (Join-Path $ScriptDir "..")
 
-$Dump = if ($args[0]) { $args[0] } else { "pq-datadump.json" }
-$Url = if ($env:INGEST_URL) { $env:INGEST_URL } else { "http://localhost:8081/ingest" }
+$Prod = $false
+$Rest = [System.Collections.ArrayList]@()
+foreach ($a in $args) {
+    if ($a -eq "--prod") {
+        $Prod = $true
+    } else {
+        [void]$Rest.Add($a)
+    }
+}
+
+$Dump = if ($Rest.Count -gt 0) { $Rest[0] } else { "pq-datadump.json" }
+$Url = if ($Prod) {
+    "http://wiki.playpixelquest.com:8081/ingest"
+} elseif ($env:INGEST_URL) {
+    $env:INGEST_URL
+} else {
+    "http://localhost:8081/ingest"
+}
 $Token = $env:DATADUMP_INGEST_SECRET
 
 if (-not $Token) {
