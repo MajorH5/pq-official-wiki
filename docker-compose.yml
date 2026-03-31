@@ -13,8 +13,6 @@ services:
   mediawiki:
     container_name: mediawiki
     build: ./mediawiki
-    # Explicit tag so `docker images` / EC2 deploys show the built image (not an anonymous :latest).
-    image: pqwiki-mediawiki:latest
     restart: always
     env_file:
       - .env
@@ -33,9 +31,7 @@ services:
       - ./uploads.ini:/usr/local/etc/php/conf.d/uploads.ini
       - ./LocalSettings.php:/var/www/html/LocalSettings.php
       - ./LocalSettings.pixelquest-snippet.php:/var/www/html/LocalSettings.pixelquest-snippet.php:ro
-      # Dev: mount ONLY this extension subfolder. Do NOT mount ./mediawiki/extensions -> /var/www/html/extensions
-      # on EC2/prod — that replaces the whole extensions dir with the host tree (often only PixelQuestRoblox)
-      # and hides CheckUser, EmbedVideo, Lingo, WikiSEO, etc. baked into the image.
+      # Dev: always use repo extension (avoids stale/broken image COPY). Remove for image-only deploys.
       - ./mediawiki/extensions/PixelQuestRoblox:/var/www/html/extensions/PixelQuestRoblox:ro
       # Optional: pq-datadump.json for Roblox profile item/skin lookups (set PQ_DATADUMP_PATH=/var/www/html/pq-datadump.json)
       - ./pq-datadump.json:/var/www/html/pq-datadump.json:ro

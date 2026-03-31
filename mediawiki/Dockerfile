@@ -19,8 +19,6 @@ RUN apk add --no-cache git ca-certificates \
 
 FROM mediawiki:lts
 
-LABEL org.opencontainers.image.description="pq-wiki mediawiki (bundled extensions: EmbedVideo, Lingo, WikiSEO, CheckUser, PixelQuestRoblox)"
-
 COPY --from=ext-src --chown=www-data:www-data /EmbedVideo /var/www/html/extensions/EmbedVideo
 COPY --from=ext-src --chown=www-data:www-data /Lingo /var/www/html/extensions/Lingo
 COPY --from=ext-src --chown=www-data:www-data /WikiSEO /var/www/html/extensions/WikiSEO
