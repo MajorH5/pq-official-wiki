@@ -23,5 +23,5 @@ def build_account_stat_wikitext(account_stat: dict, version: str) -> str:
             "[[Category:Account Stats]]",
         ]
     )
-    return f"<!-- PQ bot generated {version} — do not remove -->\n{body}"
+    return body
 

@@ -319,7 +319,7 @@ def build_item_wikitext(
         wiki_image_filename=first_wiki_filename_from_file_wikitext(icon),
         image_alt=f"{item_name} icon",
     )
-    return f"<!-- PQ bot generated {version} — do not remove -->{body}\n\n{seo}"
+    return f"{body}\n\n{seo}"
 
 
 _POTION_STAT_SHORT = {

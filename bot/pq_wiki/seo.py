@@ -43,6 +43,16 @@ def default_preview_image_url(site: pywikibot.Site) -> str:
     return f"{_site_server_url(site)}/images/default-preview.png"
 
 
+def _wiki_sitename(site: pywikibot.Site) -> str:
+    try:
+        s = site.siteinfo("sitename")
+        if s:
+            return str(s).strip()
+    except Exception:
+        pass
+    return "Pixel Quest Wiki"
+
+
 def plain_text_for_seo(s: str) -> str:
     """Strip simple wikitext noise for meta descriptions."""
     t = re.sub(r"''+", "", s or "")
@@ -72,22 +82,27 @@ def wiki_seo_block(
     """
     Appended at the **bottom** of bot-generated wikitext.
     Uses full image URL (uploaded file or ``default-preview.png``).
+
+    Browser title: ``{page title} - {sitename}``. ``title_mode=replace`` avoids WikiSEO
+    ``append`` duplicating the article name (e.g. ``Foo - Foo``).
     """
-    title = _seo_safe_value(page_title, 120)
+    base_title = _seo_safe_value(page_title, 120)
+    sitename = _wiki_sitename(site)
+    full_title = _seo_safe_value(f"{page_title} - {sitename}", 200)
     desc = _seo_safe_value(description, 300)
     if not desc:
         desc = "Pixel Quest Wiki"
     alt = _seo_safe_value(image_alt, 200)
     if not alt:
-        alt = title or "Pixel Quest Wiki"
+        alt = base_title or "Pixel Quest Wiki"
 
     img_url = public_url_for_wiki_image(site, wiki_image_filename) or default_preview_image_url(site)
 
     # One block; newlines are fine inside {{#seo:}} for readability.
     return (
         "{{#seo:\n"
-        f" |title={title}\n"
-        " |title_mode=append\n"
+        f" |title={full_title}\n"
+        " |title_mode=replace\n"
         f" |description={desc}\n"
         f" |image={img_url}\n"
         f" |image_alt={alt}\n"

@@ -19,9 +19,13 @@ COPY extensions/PixelQuestRoblox /var/www/html/extensions/PixelQuestRoblox
 RUN a2enmod rewrite
 
 # Allow .htaccess in docroot (official image may use AllowOverride None)
+# Allow .htaccess; deny installer at server level even if rewrite is off.
 RUN printf '%s\n' \
 	'<Directory /var/www/html/>' \
 	'    AllowOverride All' \
+	'</Directory>' \
+	'<Directory /var/www/html/mw-config>' \
+	'    Require all denied' \
 	'</Directory>' \
 	> /etc/apache2/conf-available/pq-wiki-htaccess.conf \
 	&& a2enconf pq-wiki-htaccess

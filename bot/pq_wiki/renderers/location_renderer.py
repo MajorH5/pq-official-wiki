@@ -161,7 +161,7 @@ def build_location_wikitext(
         wiki_image_filename=seo_image_fname,
         image_alt=f"{name} preview",
     )
-    return f"<!-- PQ bot generated {version} -->{body}\n\n{seo}"
+    return f"{body}\n\n{seo}"
 
 
 def _key_inline_wikitext(

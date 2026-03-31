@@ -184,4 +184,4 @@ def build_skin_wikitext(
         wiki_image_filename=first_wiki_filename_from_file_wikitext(sprite_preview),
         image_alt=f"{name} skin",
     )
-    return f"<!-- PQ bot generated {version} -->{body}\n\n{seo}"
+    return f"{body}\n\n{seo}"

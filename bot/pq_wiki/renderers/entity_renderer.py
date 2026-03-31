@@ -197,7 +197,7 @@ def build_entity_wikitext(
         wiki_image_filename=first_wiki_filename_from_file_wikitext(icon),
         image_alt=f"{name} sprite",
     )
-    return f"<!-- PQ bot generated {version} -->{body}\n\n{seo}"
+    return f"{body}\n\n{seo}"
 
 
 def _format_speeches_section(go: dict) -> str:

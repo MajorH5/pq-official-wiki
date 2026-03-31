@@ -6,6 +6,11 @@ import pywikibot
 
 from pq_wiki.import_log import get_import_logger
 
+# Human adds this to wikitext to allow the next import to overwrite even when the latest
+# revision is not by the bot. Bot output does not include it (one-shot per run unless re-added).
+# __NOPQBOT__ still blocks saves if both appear.
+ALLOW_PQ_BOT_OVERWRITE_MAGIC = "__PQBOT_OVERWRITE__"
+
 
 def _canonical_username(x: object) -> str:
     """Normalize for comparison; Pywikibot may return str or User-like objects."""
@@ -54,6 +59,9 @@ def peek_skip_build_reason(
     """
     If this returns non-None, save_bot_page would skip without needing built wikitext
     (human-owned page, or __NOPQBOT__). Skips expensive sprite uploads during import.
+
+    Human-touched pages are skipped unless the page contains ``__PQBOT_OVERWRITE__``
+    (opt-in for the next bot save). ``__NOPQBOT__`` always wins over that tag.
     """
     if force_overwrite:
         return None
@@ -68,7 +76,8 @@ def peek_skip_build_reason(
         return "skipped_nopqbot"
     try:
         if not _last_editors_match(bot_user, page):
-            return "skipped_human"
+            if ALLOW_PQ_BOT_OVERWRITE_MAGIC not in text:
+                return "skipped_human"
     except Exception:
         return None
     return None
@@ -109,7 +118,11 @@ def save_bot_page(
             pass
         if "__NOPQBOT__" in page.text:
             return "skipped_nopqbot"
-        if not force_overwrite and not _last_editors_match(bot_user, page):
+        if (
+            not force_overwrite
+            and not _last_editors_match(bot_user, page)
+            and ALLOW_PQ_BOT_OVERWRITE_MAGIC not in page.text
+        ):
             return "skipped_human"
         if (not force_overwrite) and _norm_wikitext(page.text) == _norm_wikitext(text):
             log.debug(

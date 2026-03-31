@@ -223,4 +223,4 @@ def build_achievement_wikitext(
         wiki_image_filename=first_wiki_filename_from_file_wikitext(icon_w),
         image_alt=f"{name} achievement",
     )
-    return f"<!-- PQ bot generated {version} -->{body}\n\n{seo}"
+    return f"{body}\n\n{seo}"

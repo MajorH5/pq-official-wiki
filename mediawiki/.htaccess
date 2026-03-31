@@ -1,5 +1,21 @@
 # Short URLs: /wiki/Page_title → index.php (see Manual:Short_URL)
+# Hardening: 403 Forbidden for installer / internals (see Manual:Security, production checklist).
 <IfModule mod_rewrite.c>
 RewriteEngine On
+
+# Block web access to installer and other paths that should never be fetched directly.
+# [F] = 403 Forbidden (not 404).
+RewriteRule ^mw-config(/|$) - [F,L]
+RewriteRule ^cache(/|$) - [F,L]
+RewriteRule ^includes(/|$) - [F,L]
+RewriteRule ^languages(/|$) - [F,L]
+RewriteRule ^maintenance(/|$) - [F,L]
+RewriteRule ^serialized(/|$) - [F,L]
+RewriteRule ^tests(/|$) - [F,L]
+RewriteRule ^vendor(/|$) - [F,L]
+RewriteRule ^\.git(/|$) - [F,L]
+RewriteRule ^LocalSettings\.php$ - [F,L]
+RewriteRule ^AdminSettings\.php$ - [F,L]
+
 RewriteRule ^/?wiki(/.*)?$ %{DOCUMENT_ROOT}/index.php [L]
 </IfModule>

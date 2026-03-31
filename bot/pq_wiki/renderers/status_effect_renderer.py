@@ -89,7 +89,6 @@ def build_status_effects_index_wikitext(
     ``[[Status effects#Fragment|Name]]`` (see ``status_effect_wikilink_path``).
     """
     parts: list[str] = [
-        f"<!-- PQ bot generated {version} -->",
         "__NOTOC__",
         "",
     ]
