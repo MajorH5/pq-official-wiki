@@ -1,17 +1,30 @@
 # Pixel Quest wiki — extend official MediaWiki image with bundled extensions.
 # Build context: ./mediawiki (see docker-compose.yml).
+#
+# All third-party extensions are cloned in an Alpine stage (git is not installed in mediawiki:lts).
+# Match mediawiki:lts (1.43.x): use REL1_43 for Wikimedia extensions. EmbedVideo: same clone as manual install.
+# After changing this file: docker compose build --no-cache mediawiki
 
-FROM alpine:3.20 AS embedvideo-src
+FROM alpine:3.20 AS ext-src
 RUN apk add --no-cache git ca-certificates \
-	&& git clone --depth 1 https://github.com/StarCitizenWiki/mediawiki-extensions-EmbedVideo.git /EmbedVideo
+	&& set -eu \
+	&& git clone --depth 1 https://github.com/StarCitizenWiki/mediawiki-extensions-EmbedVideo.git /EmbedVideo \
+	&& test -f /EmbedVideo/extension.json \
+	&& git clone --depth 1 -b REL1_43 https://github.com/wikimedia/mediawiki-extensions-Lingo.git /Lingo \
+	&& test -f /Lingo/extension.json \
+	&& git clone --depth 1 -b REL1_43 https://github.com/wikimedia/mediawiki-extensions-WikiSEO.git /WikiSEO \
+	&& test -f /WikiSEO/extension.json
 
 FROM mediawiki:lts
 
-# Optional extensions (match your MediaWiki branch when pinning; adjust REL branch if install fails)
-RUN git clone --depth 1 https://gerrit.wikimedia.org/r/mediawiki/extensions/Lingo.git /var/www/html/extensions/Lingo \
-	&& git clone --depth 1 https://github.com/wikimedia/mediawiki-extensions-WikiSEO.git /var/www/html/extensions/WikiSEO
+COPY --from=ext-src --chown=www-data:www-data /EmbedVideo /var/www/html/extensions/EmbedVideo
+COPY --from=ext-src --chown=www-data:www-data /Lingo /var/www/html/extensions/Lingo
+COPY --from=ext-src --chown=www-data:www-data /WikiSEO /var/www/html/extensions/WikiSEO
 
-COPY --from=embedvideo-src --chown=www-data:www-data /EmbedVideo /var/www/html/extensions/EmbedVideo
+# Fail the build if copies are missing (catches bad cache / broken COPY)
+RUN test -f /var/www/html/extensions/EmbedVideo/extension.json \
+	&& test -f /var/www/html/extensions/Lingo/extension.json \
+	&& test -f /var/www/html/extensions/WikiSEO/extension.json
 
 # Pixel Quest: Roblox linking + profiles (from this repo)
 COPY extensions/PixelQuestRoblox /var/www/html/extensions/PixelQuestRoblox
