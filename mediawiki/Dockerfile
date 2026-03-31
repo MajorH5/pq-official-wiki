@@ -15,7 +15,11 @@ RUN apk add --no-cache git ca-certificates \
 	&& git clone --depth 1 -b REL1_43 https://github.com/wikimedia/mediawiki-extensions-WikiSEO.git /WikiSEO \
 	&& test -f /WikiSEO/extension.json \
 	&& git clone --depth 1 -b REL1_43 https://github.com/wikimedia/mediawiki-extensions-CheckUser.git /CheckUser \
-	&& test -f /CheckUser/extension.json
+	&& test -f /CheckUser/extension.json \
+	&& git clone --depth 1 -b REL1_43 https://github.com/wikimedia/mediawiki-extensions-Lockdown.git /Lockdown \
+	&& test -f /Lockdown/extension.json \
+	&& git clone --depth 1 -b REL1_43 https://github.com/wikimedia/mediawiki-extensions-TemplateStyles.git /TemplateStyles \
+	&& test -f /TemplateStyles/extension.json
 
 FROM mediawiki:lts
 
@@ -23,12 +27,16 @@ COPY --from=ext-src --chown=www-data:www-data /EmbedVideo /var/www/html/extensio
 COPY --from=ext-src --chown=www-data:www-data /Lingo /var/www/html/extensions/Lingo
 COPY --from=ext-src --chown=www-data:www-data /WikiSEO /var/www/html/extensions/WikiSEO
 COPY --from=ext-src --chown=www-data:www-data /CheckUser /var/www/html/extensions/CheckUser
+COPY --from=ext-src --chown=www-data:www-data /Lockdown /var/www/html/extensions/Lockdown
+COPY --from=ext-src --chown=www-data:www-data /TemplateStyles /var/www/html/extensions/TemplateStyles
 
 # Fail the build if copies are missing (catches bad cache / broken COPY)
 RUN test -f /var/www/html/extensions/EmbedVideo/extension.json \
 	&& test -f /var/www/html/extensions/Lingo/extension.json \
 	&& test -f /var/www/html/extensions/WikiSEO/extension.json \
-	&& test -f /var/www/html/extensions/CheckUser/extension.json
+	&& test -f /var/www/html/extensions/CheckUser/extension.json \
+	&& test -f /var/www/html/extensions/Lockdown/extension.json \
+	&& test -f /var/www/html/extensions/TemplateStyles/extension.json
 
 
 # Pixel Quest: Roblox linking + profiles (from this repo)
