@@ -13,18 +13,31 @@ RUN apk add --no-cache git ca-certificates \
 	&& git clone --depth 1 -b REL1_43 https://github.com/wikimedia/mediawiki-extensions-Lingo.git /Lingo \
 	&& test -f /Lingo/extension.json \
 	&& git clone --depth 1 -b REL1_43 https://github.com/wikimedia/mediawiki-extensions-WikiSEO.git /WikiSEO \
-	&& test -f /WikiSEO/extension.json
+	&& test -f /WikiSEO/extension.json \
+	&& git clone --depth 1 -b REL1_43 https://github.com/wikimedia/mediawiki-extensions-CheckUser.git /CheckUser \
+	&& test -f /CheckUser/extension.json
 
 FROM mediawiki:lts
 
 COPY --from=ext-src --chown=www-data:www-data /EmbedVideo /var/www/html/extensions/EmbedVideo
 COPY --from=ext-src --chown=www-data:www-data /Lingo /var/www/html/extensions/Lingo
 COPY --from=ext-src --chown=www-data:www-data /WikiSEO /var/www/html/extensions/WikiSEO
+COPY --from=ext-src --chown=www-data:www-data /CheckUser /var/www/html/extensions/CheckUser
 
 # Fail the build if copies are missing (catches bad cache / broken COPY)
 RUN test -f /var/www/html/extensions/EmbedVideo/extension.json \
 	&& test -f /var/www/html/extensions/Lingo/extension.json \
-	&& test -f /var/www/html/extensions/WikiSEO/extension.json
+	&& test -f /var/www/html/extensions/WikiSEO/extension.json \
+	&& test -f /var/www/html/extensions/CheckUser/extension.json
+
+# CheckUser depends on Composer packages (vendor/ is not committed).
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends composer \
+	&& cd /var/www/html/extensions/CheckUser && composer install --no-dev --optimize-autoloader \
+	&& chown -R www-data:www-data /var/www/html/extensions/CheckUser \
+	&& apt-get purge -y composer \
+	&& apt-get autoremove -y \
+	&& rm -rf /var/lib/apt/lists/*
 
 # Pixel Quest: Roblox linking + profiles (from this repo)
 COPY extensions/PixelQuestRoblox /var/www/html/extensions/PixelQuestRoblox
