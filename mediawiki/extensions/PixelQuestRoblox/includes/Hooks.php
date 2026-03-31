@@ -7,7 +7,6 @@ use MediaWiki\Html\Html;
 use MediaWiki\Installer\DatabaseUpdater;
 use MediaWiki\MediaWikiServices;
 use MediaWiki\Output\OutputPage;
-use MediaWiki\Skin\Skin;
 use MediaWiki\Title\Title;
 use MediaWiki\User\User;
 use PixelQuestRoblox\Service\PqRobloxDataStoreClient;
@@ -219,8 +218,10 @@ final class Hooks {
 
 	/**
 	 * Badge sprite size (20×20) for wiki pages: add class pq-roblox-badge-ico to badge images in infoboxes.
+	 *
+	 * @param mixed $skin Skin instance (Vector legacy does not satisfy MediaWiki\Skin\Skin in all MW versions).
 	 */
-	public static function onBeforePageDisplay( OutputPage $out, Skin $skin ): void {
+	public static function onBeforePageDisplay( OutputPage $out, $skin ): void {
 		if ( strtolower( (string)$out->getRequest()->getVal( 'action', 'view' ) ) !== 'view' ) {
 			return;
 		}
