@@ -24,8 +24,7 @@
 	"SpecialPages": {
 		"LinkRobloxAccount": "PixelQuestRoblox\\SpecialLinkRobloxAccount",
 		"PQProfile": "PixelQuestRoblox\\SpecialPQProfile",
-		"RobloxProfile": "PixelQuestRoblox\\SpecialRobloxProfileRedirect",
-		"RobloxProfiles": "PixelQuestRoblox\\SpecialRobloxProfiles"
+		"RobloxProfile": "PixelQuestRoblox\\SpecialRobloxProfileRedirect"
 	},
 	"APIModules": {
 		"pqrobloxrequestcode": "PixelQuestRoblox\\Api\\ApiPqRobloxRequestCode",

@@ -3,6 +3,9 @@
 <IfModule mod_rewrite.c>
 RewriteEngine On
 
+# Main page at site root / (requires $wgMainPageIsDomainRoot in LocalSettings.php)
+RewriteRule ^$ /index.php [L,QSA]
+
 # Block web access to installer and other paths that should never be fetched directly.
 # [F] = 403 Forbidden (not 404).
 RewriteRule ^mw-config(/|$) - [F,L]
