@@ -50,9 +50,9 @@ RUN printf '%s\n' \
 	'<Directory /var/www/html/>' \
 	'    AllowOverride All' \
 	'</Directory>' \
-	'<Directory /var/www/html/mw-config>' \
-	'    Require all denied' \
-	'</Directory>' \
+	# '<Directory /var/www/html/mw-config>' \
+	# '    Require all denied' \
+	# '</Directory>' \
 	> /etc/apache2/conf-available/pq-wiki-htaccess.conf \
 	&& a2enconf pq-wiki-htaccess
 
