@@ -181,7 +181,12 @@ def _with_unreleased_namespace(title: str, unreleased: bool) -> str:
     return f"Unreleased:{title}"
 
 
-def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
+def run_import(
+    datadump_path: Path,
+    force: bool = False,
+    *,
+    dry_run: bool = False,
+) -> dict[str, Any]:
     log = get_import_logger()
     ensure_dirs()
     data = load_json(datadump_path)
@@ -218,7 +223,8 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
     except Exception:
         pass
 
-    ensure_pixel_art_css(site)
+    if not dry_run:
+        ensure_pixel_art_css(site)
     _warn_missing_layout_templates(site, log)
 
     items = data.get("Items") or []
@@ -952,7 +958,7 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
             progress=f"{idx}/{n_qu}",
         )
 
-    if not errors:
+    if not errors and not dry_run:
         write_cached_datadump(datadump_path)
         write_last_import_state(
             datadump_version=version,

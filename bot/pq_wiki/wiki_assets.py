@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import json
 import re
 from pathlib import Path
@@ -58,6 +59,11 @@ def ensure_file_uploaded(
     Upload file if missing. semantic_base is filename without extension (searchable name).
     Map key = semantic_base|ext for idempotent re-imports.
     """
+    dry_run_uploads = os.environ.get("PQ_BOT_DRY_RUN_UPLOADS", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
     fname = wiki_filename_for_semantic(semantic_base, ext)
     map_key = f"{semantic_base}|{ext.lower()}"
     m = _load_map()
@@ -70,8 +76,14 @@ def ensure_file_uploaded(
 
     fp = pywikibot.FilePage(site, f"File:{fname}")
     if fp.exists():
-        m[map_key] = fname
-        _save_map(m)
+        if not dry_run_uploads:
+            m[map_key] = fname
+            _save_map(m)
+        return fname
+
+    # Preview/dry-run: do not upload; still return the deterministic filename that the
+    # real import would link to.
+    if dry_run_uploads:
         return fname
 
     comment = f"PQ bot texture {fname} (datadump {version})"
