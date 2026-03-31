@@ -1,5 +1,5 @@
 """
-Semantic wiki upload filenames (searchable, no content-hash filenames).
+Semantic wiki upload filenames (searchable; projectiles are content-addressed by rendered bytes).
 
 Convention: lowercase, a-z 0-9 underscore hyphen; single extension.
 See repo docs/TEXTURE_NAMING.md.
@@ -56,12 +56,12 @@ def entity_sprite_base(entity_id: int, name: str) -> str:
     return sanitize_base(f"entity_{slug(name)}_{entity_id}")
 
 
-def projectile_sprite_base(proj_sprite: dict[str, Any]) -> str:
+def projectile_sprite_cache_key(proj_sprite: dict[str, Any]) -> str:
     """
-    One wiki file per unique rendered projectile (Roblox sheet + animation or static rect).
+    Stable key for TEXTURE_CACHE_DIR to skip re-fetch/re-render when sprite JSON is unchanged.
 
-    Different ProjectileDescriptor.Id values that share the same texture and crop/animation
-    get the same basename (deduplicates uploads). Matches sprites.projectile_visual_signature_payload.
+    **Not** the wiki File: basename — uploads use :func:`projectile_sprite_upload_basename` (hash of
+    rendered file bytes) so identical pixels share one file even if asset id / JSON changes.
     """
     from pq_wiki.sprites import projectile_visual_signature_payload
 
@@ -72,6 +72,16 @@ def projectile_sprite_base(proj_sprite: dict[str, Any]) -> str:
     if isinstance(aid, str) and aid:
         return sanitize_base(f"projectile_tex_{aid}_{short}")
     return sanitize_base(f"projectile_{short}")
+
+
+def projectile_sprite_upload_basename(file_bytes: bytes) -> str:
+    """Wiki File: basename (no extension): ``projectile_px_`` + first 16 hex chars of SHA-256 of uploaded bytes."""
+    h = hashlib.sha256(file_bytes).hexdigest()[:16]
+    return sanitize_base(f"projectile_px_{h}")
+
+
+# Backwards compatibility (same as projectile_sprite_cache_key).
+projectile_sprite_base = projectile_sprite_cache_key
 
 
 def skin_name_base(skin_id: int, name: str) -> str:
@@ -131,6 +141,14 @@ def location_minimap_base(location_slug: str) -> str:
 
 def location_screenshot_base(location_slug: str, index: int) -> str:
     return sanitize_base(f"location_{location_slug}_screenshot_{index}")
+
+
+def biome_minimap_base(biome_slug: str) -> str:
+    return sanitize_base(f"biome_{biome_slug}_minimap")
+
+
+def biome_screenshot_base(biome_slug: str, index: int) -> str:
+    return sanitize_base(f"biome_{biome_slug}_screenshot_{index}")
 
 
 def game_object_sprite_base(go_id: int, name: str) -> str:

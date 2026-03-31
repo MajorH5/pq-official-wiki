@@ -10,7 +10,6 @@ from pq_wiki.texture_names import (
     entity_sprite_base,
     item_sprite_base,
     portal_preview_base,
-    projectile_sprite_base,
     slug,
     tier_icon_filename_base,
 )
@@ -20,6 +19,9 @@ from pq_wiki.wikitext_util import (
     fmt_num,
     template_invocation,
 )
+
+# Omitted from "Found in locations" — rotating bosses, not a stable spawn list.
+_SKIP_FOUND_IN_LOCATIONS = frozenset({"The Gauntlet"})
 
 
 def _trailing_nl(s: str) -> str:
@@ -85,6 +87,8 @@ def build_entity_wikitext(
     found_parts: list[str] = []
     if entity_name_to_locations:
         for loc_name in entity_name_to_locations.get(str(name), []) or []:
+            if str(loc_name) in _SKIP_FOUND_IN_LOCATIONS:
+                continue
             found_parts.append(
                 _found_in_location_cell(
                     site,
@@ -115,6 +119,10 @@ def build_entity_wikitext(
             [
                 (f"{_stat_icon('Health', stat_icons)} Health".strip(), f"{fmt_num(hp)} HP"),
                 (f"{_stat_icon('Defense', stat_icons)} Defense".strip(), fmt_num(df)),
+                (
+                    "Health scaling",
+                    "Yes" if go.get("IsHealthScalingEnabled") else "No",
+                ),
                 ("Experience", fmt_range(exp.get("Min"), exp.get("Max"))),
             ]
         )
@@ -667,7 +675,6 @@ def _attack_image_for_projectile(site: pywikibot.Site, p: dict, version: str) ->
             ps,
             version,
             max_thumb_size=90,
-            logical_name=projectile_sprite_base(ps),
         )
         if ps
         else ""

@@ -16,6 +16,12 @@ services:
     restart: always
     env_file:
       - .env
+    # Dev: grant the Pywikibot account (WIKI_BOT_USER) editor+API rights without DB group rows.
+    # Unset PQ_GRANT_PQADMIN_IMPORT_RIGHTS in production and use Special:UserRights → bot or editor.
+    environment:
+      PQ_GRANT_PQADMIN_IMPORT_RIGHTS: "1"
+      PQ_WIKI_IMPORT_USERNAME: ${WIKI_BOT_USER:-Pqadmin}
+      WG_SERVER: ${WG_SERVER:-http://localhost:8080}
     ports:
       - "8080:80"
     depends_on:

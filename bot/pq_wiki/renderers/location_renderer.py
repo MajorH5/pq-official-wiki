@@ -109,21 +109,29 @@ def build_location_wikitext(
     found = loc.get("FoundGameObjects") or []
     if found:
         found_names = _sort_entity_names_by_tag([str(n) for n in found], entity_name_to_go)
-        fe_cells = [
-            _render_entity_preview_cell(site, n, version, go_name_to_id, entity_id_to_path, entity_name_to_go)
-            for n in found_names
-        ]
-        found_entities_block = _entity_multicolumn_wikitable("== Found entities ==", "Entity", fe_cells)
+        found_names = [n for n in found_names if _entity_resolves_to_page(n, go_name_to_id, entity_id_to_path)]
+        if found_names:
+            fe_cells = [
+                _render_entity_preview_cell(
+                    site, n, version, go_name_to_id, entity_id_to_path, entity_name_to_go
+                )
+                for n in found_names
+            ]
+            found_entities_block = _entity_multicolumn_wikitable("== Found entities ==", "Entity", fe_cells)
 
     dropped_from_block = ""
     dropped_from = _entities_that_drop_location(name, entity_name_to_go)
     if dropped_from:
         dropped_names = _sort_entity_names_by_tag(dropped_from, entity_name_to_go)
-        df_cells = [
-            _render_entity_preview_cell(site, n, version, go_name_to_id, entity_id_to_path, entity_name_to_go)
-            for n in dropped_names
-        ]
-        dropped_from_block = _entity_multicolumn_wikitable("== Dropped from ==", "Enemy", df_cells)
+        dropped_names = [n for n in dropped_names if _entity_resolves_to_page(n, go_name_to_id, entity_id_to_path)]
+        if dropped_names:
+            df_cells = [
+                _render_entity_preview_cell(
+                    site, n, version, go_name_to_id, entity_id_to_path, entity_name_to_go
+                )
+                for n in dropped_names
+            ]
+            dropped_from_block = _entity_multicolumn_wikitable("== Dropped from ==", "Enemy", df_cells)
 
     cat_lines = ["[[Category:Locations]]"]
     if unreleased:
@@ -302,6 +310,17 @@ def _difficulty_display(raw: object, skull_icon: str) -> str:
     if not skull_icon:
         return fmt_num(d)
     return " ".join([skull_icon] * d)
+
+
+def _entity_resolves_to_page(
+    name: str,
+    go_name_to_id: dict[str, int],
+    entity_id_to_path: dict[int, str],
+) -> bool:
+    """Same rule as ``link_entity``: only include in location tables when we have a real article path."""
+    if not go_name_to_id or name not in go_name_to_id:
+        return False
+    return bool(entity_id_to_path.get(go_name_to_id[name]))
 
 
 def _entity_tag(go: dict | None) -> str:

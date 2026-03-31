@@ -62,6 +62,15 @@ def location_page_path(loc: dict, used_paths: set[str] | None = None) -> str:
     return _claim_unique_title(loc.get("Name"), fb, lid, used_paths)
 
 
+def biome_page_path(biome: dict, used_paths: set[str] | None = None) -> str:
+    """Flat title for overworld biomes (shared namespace with items/locations/entities)."""
+    bid = int(biome["Id"])
+    fb = f"Biome {bid}"
+    if used_paths is None:
+        return _clean_title(biome.get("Name"), fb)
+    return _claim_unique_title(biome.get("Name"), fb, bid, used_paths)
+
+
 def entity_page_path(go: dict, used_paths: set[str] | None = None) -> str:
     """Flat human title: Boss Name (no Enemies/ prefix; category still marks type)."""
     gid = go["Id"]

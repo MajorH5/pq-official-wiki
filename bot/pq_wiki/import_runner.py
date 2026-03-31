@@ -47,6 +47,8 @@ from pq_wiki.render_pages import (
     build_account_stat_wikitext,
     build_achievement_wikitext,
     build_badge_wikitext,
+    biome_page_path,
+    build_biome_wikitext,
     build_entity_wikitext,
     build_item_wikitext,
     build_location_wikitext,
@@ -141,7 +143,7 @@ def load_overrides() -> dict[str, Any]:
 
 def _warn_missing_layout_templates(site: pywikibot.Site, log) -> None:
     """If layout templates are missing, item pages show raw {{PQ Item|...}} instead of rendering."""
-    for short in ("PQ Item", "PQ Entity", "PQ Location", "PQ Skin", "PQ Badge", "PQ Achievement"):
+    for short in ("PQ Item", "PQ Entity", "PQ Location", "PQ Biome", "PQ Skin", "PQ Badge", "PQ Achievement"):
         title = f"Template:{short}"
         p = pywikibot.Page(site, title)
         try:
@@ -208,6 +210,8 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
 
     items = data.get("Items") or []
     locations = data.get("Locations") or []
+    biomes_raw = data.get("Biomes") or []
+    biomes = [b for b in biomes_raw if isinstance(b, dict) and b.get("Id") is not None]
     game_objects = data.get("GameObjects") or []
     account_stats = data.get("AccountStats") or []
     overrides = load_overrides()
@@ -316,6 +320,7 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
     locations_to_process = locations[:nlim] if nlim else locations
     all_entities = [go for go in game_objects if go.get("IsEntity", True)]
     entities_to_process = all_entities[:nlim] if nlim else all_entities
+    biomes_to_process = biomes[:nlim] if nlim else biomes
     skins_to_process = character_skins[:nlim] if nlim else character_skins
     account_stats_to_process = account_stats[:nlim] if nlim else account_stats
     badges_to_process = badges[:nlim] if nlim else badges
@@ -323,11 +328,12 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
 
     if nlim:
         log.info(
-            "GENERATE_FEW_PAGES cap %d per type: importing %d items, %d locations, %d entities, "
-            "%d skins, %d account stats (status effects: always one combined index, %d sections)",
+            "GENERATE_FEW_PAGES cap %d per type: importing %d items, %d locations, %d biomes, "
+            "%d entities, %d skins, %d account stats (status effects: always one combined index, %d sections)",
             nlim,
             len(items_to_process),
             len(locations_to_process),
+            len(biomes_to_process),
             len(entities_to_process),
             len(skins_to_process),
             len(account_stats_to_process),
@@ -424,6 +430,12 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
         base = entity_page_path(go, used)
         entity_id_to_path[gid] = _with_unreleased_namespace(base, is_unreleased)
 
+    biome_id_to_path: dict[int, str] = {}
+    for bio in sorted(biomes, key=lambda x: int(x["Id"])):
+        bid = int(bio["Id"])
+        base = biome_page_path(bio, used_paths_public)
+        biome_id_to_path[bid] = base
+
     item_drop_sources = build_item_id_to_drop_sources(
         game_objects,
         item_name_to_id,
@@ -477,6 +489,7 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
     last_state = read_last_import_state() or {}
     ci: set[int] = set()
     cl: set[int] = set()
+    cbi: set[int] = set()
     ce: set[int] = set()
     cs: set[int] = set()
     cb: set[int] = set()
@@ -493,10 +506,11 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
             "Full wiki rebuild (no/partial cache, render fingerprint changed, PQ_IMPORT_FULL, or --force)",
         )
     else:
-        ci, cl, ce, cs, cb, ca, cfx = compute_incremental_sets(
+        ci, cl, cbi, ce, cs, cb, ca, cfx = compute_incremental_sets(
             old_data=old_cached,
             new_items=items,
             new_locations=locations,
+            new_biomes=biomes,
             new_game_objects=game_objects,
             new_character_skins=character_skins,
             new_badges=badges_for_diff,
@@ -505,17 +519,18 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
             unreleased_entities=unreleased_entities,
         )
         log.info(
-            "Incremental scope: %d items, %d locations, %d entities, %d skins, %d badges, "
+            "Incremental scope: %d items, %d locations, %d biomes, %d entities, %d skins, %d badges, "
             "%d achievements, %d status effect rows changed (index page if any)",
             len(ci),
             len(cl),
+            len(cbi),
             len(ce),
             len(cs),
             len(cb),
             len(ca),
             len(cfx),
         )
-        if not ci and not cl and not ce and not cs and not cb and not ca and not cfx:
+        if not ci and not cl and not cbi and not ce and not cs and not cb and not ca and not cfx:
             log.info("Incremental diff: no page updates needed (wikitext would be unchanged)")
 
     stats: dict[str, int] = {}
@@ -531,6 +546,7 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
 
     items_work = _work_list(items_to_process, ci)
     locations_work = _work_list(locations_to_process, cl)
+    biomes_work = _work_list(biomes_to_process, cbi)
     entities_work = _work_list(entities_to_process, ce)
     skins_work = _work_list(skins_to_process, cs)
     # Keep account stats fully refreshed; list is small and currently outside incremental diff sets.
@@ -666,6 +682,33 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
             build_loc,
             save_loc,
             progress=f"{idx}/{n_locs}",
+        )
+
+    n_biomes = len(biomes_work)
+    for idx, bio in enumerate(biomes_work, start=1):
+        path = biome_id_to_path[int(bio["Id"])]
+
+        def build_biome(b=bio):
+            return build_biome_wikitext(
+                site,
+                b,
+                version,
+                go_name_to_id,
+                entity_id_to_path,
+                entity_name_to_go=entity_name_to_go,
+                location_name_to_path=location_name_to_path,
+                difficulty_skull_icon=difficulty_skull_icon,
+            )
+
+        def save_biome(s, ttl, txt, ver, user, k):
+            return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=FORCE_OVERWRITE)
+
+        _one(
+            "biome",
+            path,
+            build_biome,
+            save_biome,
+            progress=f"{idx}/{n_biomes}",
         )
 
     n_entities = len(entities_work)
@@ -846,6 +889,7 @@ def run_import(datadump_path: Path, force: bool = False) -> dict[str, Any]:
         "import_full": import_full,
         "incremental_items": len(ci) if not import_full else None,
         "incremental_locations": len(cl) if not import_full else None,
+        "incremental_biomes": len(cbi) if not import_full else None,
         "incremental_entities": len(ce) if not import_full else None,
     }
 

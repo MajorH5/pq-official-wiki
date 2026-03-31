@@ -133,14 +133,20 @@ def upload_projectile_sprite(
     proj_sprite: dict,
     version: str,
     *,
-    logical_name: str,
     thumb_size: int | None = None,
     max_thumb_size: int | None = None,
 ) -> str:
+    """
+    Upload projectile PNG/GIF under a **content-addressed** basename: SHA-256 of the final file
+    bytes (after GIF normalization). Same rendered output reuses one wiki file even when the
+    datadump asset id / JSON signature changes. JSON-based :func:`projectile_sprite_cache_key`
+    is only used for local TEXTURE_CACHE_DIR fast path.
+    """
     from pq_wiki.import_log import get_import_logger
 
     log = get_import_logger()
-    cached = _load_cached_texture(logical_name)
+    cache_key = projectile_sprite_cache_key(proj_sprite)
+    cached = _load_cached_texture(cache_key)
     if cached is not None:
         data, ext = cached
     else:
@@ -149,11 +155,20 @@ def upload_projectile_sprite(
         except Exception as e:
             log.debug("Projectile sprite failed: %s", e)
             return ""
+        path = _cache_path(cache_key, ext)
+        if not path.exists():
+            path.write_bytes(data)
+    # Hash must match bytes we upload (upload_raw_bytes_named normalizes GIF again; idempotent).
+    if ext == "gif":
+        data = normalize_gif_bytes_for_imagemagick(data)
+        _cache_path(cache_key, ext).write_bytes(data)
+
+    semantic_base = projectile_sprite_upload_basename(data)
     return upload_raw_bytes_named(
         site,
         data,
         ext,
-        logical_name,
+        semantic_base,
         version,
         thumb_size=thumb_size,
         max_thumb_size=max_thumb_size,

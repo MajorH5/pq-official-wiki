@@ -18,7 +18,8 @@
 		"UserGetDefaultOptions": "PixelQuestRoblox\\Hooks::onUserGetDefaultOptions",
 		"OutputPageBeforeHTML": "PixelQuestRoblox\\Hooks::onOutputPageBeforeHTML",
 		"BeforePageDisplay": "PixelQuestRoblox\\Hooks::onBeforePageDisplay",
-		"ApiOpenSearchSuggest": "PixelQuestRoblox\\Hooks::onApiOpenSearchSuggest"
+		"ApiOpenSearchSuggest": "PixelQuestRoblox\\Hooks::onApiOpenSearchSuggest",
+		"SpecialSearchResultsPrepend": "PixelQuestRoblox\\Hooks::onSpecialSearchResultsPrepend"
 	},
 	"SpecialPages": {
 		"LinkRobloxAccount": "PixelQuestRoblox\\SpecialLinkRobloxAccount",

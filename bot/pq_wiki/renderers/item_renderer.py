@@ -5,7 +5,7 @@ import pywikibot
 from pq_wiki.drop_sources import ItemDropSource, format_item_drop_sources_wikitext
 from pq_wiki.renderers.entity_renderer import _found_in_location_cell, _format_status_effects, _link_image_wikitext
 from pq_wiki.renderers.shared import fmt_range, green, link_entity, signed_delta
-from pq_wiki.texture_names import entity_sprite_base, item_sprite_base, projectile_sprite_base, tier_icon_filename_base
+from pq_wiki.texture_names import entity_sprite_base, item_sprite_base, tier_icon_filename_base
 from pq_wiki.texture_service import upload_projectile_sprite, upload_sprite_if_possible
 from pq_wiki.seo import first_wiki_filename_from_file_wikitext, plain_text_for_seo, wiki_seo_block
 from pq_wiki.valor_icon import valor_label
@@ -122,7 +122,7 @@ def build_item_wikitext(
             (
                 "Drop",
                 '<span style="font-size:0.85em;border:1px solid #c9a227;border-radius:3px;padding:1px 6px;color:#b8860b" '
-                'title="Globally announced in-game when this item drops">Announced</span>',
+                'title="Globally announced in-game when this item drops">Globally Announced</span>',
             )
         )
 
@@ -181,7 +181,7 @@ def build_item_wikitext(
         wparts: list[str] = ["== Weapon stats =="]
         ps = proj.get("Sprite")
         if ps:
-            pw = upload_projectile_sprite(site, ps, version, logical_name=projectile_sprite_base(ps))
+            pw = upload_projectile_sprite(site, ps, version)
             if pw:
                 wparts.append(f"'''Projectile:''' {pw}")
                 wparts.append("")

@@ -1,6 +1,7 @@
 from pq_wiki.renderers.account_stat_renderer import build_account_stat_wikitext
 from pq_wiki.renderers.achievement_renderer import build_achievement_wikitext
 from pq_wiki.renderers.badge_renderer import build_badge_wikitext
+from pq_wiki.renderers.biome_renderer import build_biome_wikitext
 from pq_wiki.renderers.entity_renderer import build_entity_wikitext
 from pq_wiki.renderers.item_renderer import build_item_wikitext
 from pq_wiki.renderers.location_renderer import build_location_wikitext
@@ -9,6 +10,7 @@ from pq_wiki.renderers.pathing import (
     account_stat_page_path,
     achievement_page_path,
     badge_page_path,
+    biome_page_path,
     entity_page_path,
     item_page_path,
     location_page_path,
@@ -27,6 +29,7 @@ __all__ = [
     "build_account_stat_wikitext",
     "build_achievement_wikitext",
     "build_badge_wikitext",
+    "build_biome_wikitext",
     "build_entity_wikitext",
     "build_item_wikitext",
     "build_location_wikitext",
@@ -36,6 +39,7 @@ __all__ = [
     "account_stat_page_path",
     "achievement_page_path",
     "badge_page_path",
+    "biome_page_path",
     "entity_page_path",
     "item_page_path",
     "location_page_path",

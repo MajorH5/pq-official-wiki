@@ -1,0 +1,8 @@
+{{PQ Biome
+|overworld_line=
+|difficulty=
+|map_section=
+|screenshots_section=
+|found_entities=
+|categories=[[Category:Biomes]]
+}}

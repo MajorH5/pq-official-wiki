@@ -3,6 +3,7 @@
 namespace PixelQuestRoblox;
 
 use MediaWiki\Context\RequestContext;
+use MediaWiki\Html\Html;
 use MediaWiki\Installer\DatabaseUpdater;
 use MediaWiki\MediaWikiServices;
 use MediaWiki\Output\OutputPage;
@@ -315,6 +316,7 @@ final class Hooks {
 		$show = self::resolveProfileVisibility( $viewer, $target, $isOwner, $viewerRobloxId, $robloxId );
 		$playerData = PqRobloxDataStoreClient::getPlayerDataForRobloxUser( $robloxId, false );
 		$lookup = PqRobloxLookupIndex::instance();
+		$robloxPublic = PqRobloxUsersApi::getPublicUser( $robloxId );
 
 		$special = Title::makeTitle( \NS_SPECIAL, 'PQProfile/' . (int)$robloxId );
 		$openLabel = htmlspecialchars( $out->getContext()->msg( 'pqroblox-userpage-preview-open' )->text(), ENT_QUOTES );
@@ -472,6 +474,72 @@ final class Hooks {
 	}
 
 	/**
+	 * Same player-index matches as OpenSearch autocomplete (pq_roblox_player_index).
+	 *
+	 * @return list<array{robloxUserId:int, username_display:string}>
+	 */
+	private static function collectPqProfileIndexMatches( string $q ): array {
+		$dbr = MediaWikiServices::getInstance()->getDBLoadBalancer()->getConnection( DB_REPLICA );
+		if ( !$dbr->tableExists( 'pq_roblox_player_index', __METHOD__ ) ) {
+			return [];
+		}
+		$index = new PqRobloxPlayerIndexStore();
+		$matches = [];
+		if ( preg_match( '/^\d+$/', $q ) ) {
+			$matches = array_merge( $matches, $index->searchRobloxIdsByPrefix( $q, 5 ) );
+		}
+		$matches = array_merge( $matches, $index->searchPrefix( $q, 8 ) );
+		$dedup = [];
+		$seenRid = [];
+		foreach ( $matches as $m ) {
+			$rid = (int)$m['robloxUserId'];
+			if ( isset( $seenRid[$rid] ) ) {
+				continue;
+			}
+			$seenRid[$rid] = true;
+			$dedup[] = $m;
+		}
+
+		return $dedup;
+	}
+
+	/**
+	 * Show indexed Pixel Quest profiles on Special:Search (full results), not only OpenSearch autocomplete.
+	 *
+	 * @param \SpecialSearch $specialSearch
+	 */
+	public static function onSpecialSearchResultsPrepend( $specialSearch, OutputPage $output, string $term ): void {
+		$q = trim( $term );
+		if ( $q === '' ) {
+			return;
+		}
+		$matches = self::collectPqProfileIndexMatches( $q );
+		if ( $matches === [] ) {
+			return;
+		}
+		$items = [];
+		foreach ( $matches as $m ) {
+			$name = $m['username_display'];
+			$rid = (int)$m['robloxUserId'];
+			$nameUnderscore = str_replace( ' ', '_', $name );
+			$t = Title::makeTitle( \NS_SPECIAL, 'PQProfile/' . $nameUnderscore );
+			$label = $name . ' (' . $rid . ')';
+			$items[] = Html::rawElement(
+				'li',
+				[],
+				Html::element( 'a', [ 'href' => $t->getFullURL() ], $label )
+			);
+		}
+		$html = Html::rawElement(
+			'div',
+			[ 'class' => 'pq-search-profile-results' ],
+			Html::element( 'h3', [], wfMessage( 'pqroblox-search-profiles-heading' )->text() )
+			. Html::rawElement( 'ul', [], implode( '', $items ) )
+		);
+		$output->addHTML( $html );
+	}
+
+	/**
 	 * Keep Pixel Quest profile suggestions after normal wiki titles; append index matches.
 	 *
 	 * @param array<int, array<string, mixed>> &$results
@@ -480,28 +548,7 @@ final class Hooks {
 		$req = RequestContext::getMain()->getRequest();
 		$q = trim( (string)$req->getVal( 'search', '' ) );
 		if ( $q !== '' ) {
-			$dbr = MediaWikiServices::getInstance()->getDBLoadBalancer()->getConnection( DB_REPLICA );
-			if ( !$dbr->tableExists( 'pq_roblox_player_index', __METHOD__ ) ) {
-				self::sortPqProfileSpecialsLast( $results );
-				return;
-			}
-			$index = new PqRobloxPlayerIndexStore();
-			$matches = [];
-			if ( preg_match( '/^\d+$/', $q ) ) {
-				$matches = array_merge( $matches, $index->searchRobloxIdsByPrefix( $q, 5 ) );
-			}
-			$matches = array_merge( $matches, $index->searchPrefix( $q, 8 ) );
-			$dedup = [];
-			$seenRid = [];
-			foreach ( $matches as $m ) {
-				$rid = (int)$m['robloxUserId'];
-				if ( isset( $seenRid[$rid] ) ) {
-					continue;
-				}
-				$seenRid[$rid] = true;
-				$dedup[] = $m;
-			}
-			$matches = $dedup;
+			$matches = self::collectPqProfileIndexMatches( $q );
 			$seen = [];
 			foreach ( $results as $r ) {
 				$t = $r['title'] ?? null;

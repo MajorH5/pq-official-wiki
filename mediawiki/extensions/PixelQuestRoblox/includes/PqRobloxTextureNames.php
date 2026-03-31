@@ -101,8 +101,17 @@ final class PqRobloxTextureNames {
 	}
 
 	/**
-	 * One file per unique rendered projectile (sheet + animation or static rect), not per descriptor id.
-	 * Must match bot/pq_wiki/texture_names.py projectile_sprite_base().
+	 * Wiki File: basename for a projectile upload: first 16 hex chars of SHA-256 of the **file bytes**
+	 * (PNG or GIF as uploaded). Cannot be derived from ProjectileDescriptor JSON alone — the bot renders
+	 * first, then names `projectile_px_{hash16}`.
+	 */
+	public static function projectileSpriteBaseFromUploadBytes( string $bytes ): string {
+		$h = hash( 'sha256', $bytes, false );
+		return self::sanitizeBase( 'projectile_px_' . substr( $h, 0, 16 ) );
+	}
+
+	/**
+	 * Legacy JSON-signature key (local bot cache / old wikis). Wiki uploads use projectileSpriteBaseFromUploadBytes().
 	 *
 	 * @param array<string, mixed> $sprite ProjectileDescriptor.Sprite from the datadump
 	 */

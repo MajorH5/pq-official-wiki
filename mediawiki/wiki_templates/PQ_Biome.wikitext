@@ -1,0 +1,20 @@
+<noinclude>
+'''PQ Biome layout''' — transcluded by overworld biome pages. Biomes live inside the [[Overworld]] location.
+
+The bot emits map/screenshots placeholders until the datadump includes sprites; replace images on the wiki as needed.
+</noinclude>
+{{{overworld_line|}}}
+
+{{#if:{{{difficulty|}}}|'''Difficulty''' {{{difficulty|}}}
+
+}}
+== Notes ==
+<!-- Add editor notes/history here. -->
+
+{{{map_section|}}}
+
+{{{screenshots_section|}}}
+
+{{{found_entities|}}}
+
+{{{categories|}}}

@@ -31,9 +31,8 @@ def get_texture_url(sprite: Optional[dict]) -> Optional[str]:
 
 def projectile_visual_signature_payload(proj_sprite: dict) -> dict[str, Any]:
     """
-    Canonical data that determines rendered projectile pixels (see projectile_sprite_to_bytes).
-    Used for wiki filenames so different ProjectileDescriptor.Id values that share the same
-    sheet + crop/animation map to one File: name.
+    Canonical data for **local** TEXTURE_CACHE_DIR keys (see texture_names.projectile_sprite_cache_key).
+    Wiki File: names are content-addressed from rendered bytes (projectile_sprite_upload_basename).
     """
     tex = get_texture_url(proj_sprite)
     aid = parse_asset_id(tex or "")

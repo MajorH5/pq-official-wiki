@@ -37,6 +37,7 @@ _RENDER_CODE_PATHS: tuple[Path, ...] = (
     BOT_ROOT / "pq_wiki" / "renderers" / "item_renderer.py",
     BOT_ROOT / "pq_wiki" / "renderers" / "entity_renderer.py",
     BOT_ROOT / "pq_wiki" / "renderers" / "location_renderer.py",
+    BOT_ROOT / "pq_wiki" / "renderers" / "biome_renderer.py",
     BOT_ROOT / "pq_wiki" / "renderers" / "skin_renderer.py",
     BOT_ROOT / "pq_wiki" / "renderers" / "badge_renderer.py",
     BOT_ROOT / "pq_wiki" / "renderers" / "achievement_renderer.py",
@@ -60,6 +61,7 @@ _TEMPLATE_NAMES: tuple[str, ...] = (
     "PQ_Item.wikitext",
     "PQ_Entity.wikitext",
     "PQ_Location.wikitext",
+    "PQ_Biome.wikitext",
     "PQ_Skin.wikitext",
     "PQ_Badge.wikitext",
     "PQ_Achievement.wikitext",
@@ -295,6 +297,25 @@ def diff_location_ids(
     return changed
 
 
+def diff_biome_ids(
+    old_data: dict[str, Any],
+    new_biomes: list[dict[str, Any]],
+) -> set[int]:
+    old_b = old_data.get("Biomes") or []
+    if not isinstance(old_b, list):
+        old_b = []
+    new_idx = _index_by_id(new_biomes)
+    old_idx = _index_by_id(list(old_b))
+    changed: set[int] = set()
+    for bid, row in new_idx.items():
+        if bid not in old_idx:
+            changed.add(bid)
+            continue
+        if _object_hash(row) != _object_hash(old_idx[bid]):
+            changed.add(bid)
+    return changed
+
+
 def diff_entity_ids(
     old_data: dict[str, Any],
     new_game_objects: list[dict[str, Any]],
@@ -376,14 +397,15 @@ def compute_incremental_sets(
     old_data: dict[str, Any],
     new_items: list[dict[str, Any]],
     new_locations: list[dict[str, Any]],
+    new_biomes: list[dict[str, Any]],
     new_game_objects: list[dict[str, Any]],
     new_character_skins: list[dict[str, Any]],
     new_badges: list[dict[str, Any]],
     new_achievements: list[dict[str, Any]],
     new_status_effects: list[dict[str, Any]],
     unreleased_entities: set[int],
-) -> tuple[set[int], set[int], set[int], set[int], set[int], set[int], set[int]]:
-    """Returns changed ids: items, locations, entities, skins, badges, achievements, status effects."""
+) -> tuple[set[int], set[int], set[int], set[int], set[int], set[int], set[int], set[int]]:
+    """Returns changed ids: items, locations, biomes, entities, skins, badges, achievements, status effects."""
     ci = diff_item_ids(
         old_data,
         new_items,
@@ -391,9 +413,10 @@ def compute_incremental_sets(
         unreleased_entities,
     )
     cl = diff_location_ids(old_data, new_locations)
+    cbi = diff_biome_ids(old_data, new_biomes)
     ce = diff_entity_ids(old_data, new_game_objects, new_locations)
     cs = diff_skin_ids(old_data, new_character_skins)
     cb = diff_badge_ids(old_data, new_badges)
     ca = diff_achievement_ids(old_data, new_achievements)
     cfx = diff_status_effect_ids(old_data, new_status_effects)
-    return ci, cl, ce, cs, cb, ca, cfx
+    return ci, cl, cbi, ce, cs, cb, ca, cfx
