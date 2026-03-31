@@ -30,14 +30,6 @@ RUN test -f /var/www/html/extensions/EmbedVideo/extension.json \
 	&& test -f /var/www/html/extensions/WikiSEO/extension.json \
 	&& test -f /var/www/html/extensions/CheckUser/extension.json
 
-# CheckUser depends on Composer packages (vendor/ is not committed).
-RUN apt-get update \
-	&& apt-get install -y --no-install-recommends composer \
-	&& cd /var/www/html/extensions/CheckUser && composer install --no-dev --optimize-autoloader \
-	&& chown -R www-data:www-data /var/www/html/extensions/CheckUser \
-	&& apt-get purge -y composer \
-	&& apt-get autoremove -y \
-	&& rm -rf /var/lib/apt/lists/*
 
 # Pixel Quest: Roblox linking + profiles (from this repo)
 COPY extensions/PixelQuestRoblox /var/www/html/extensions/PixelQuestRoblox
