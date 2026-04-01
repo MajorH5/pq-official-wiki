@@ -23,6 +23,7 @@ Set-Location (Join-Path $ScriptDir "..")
 
 $Prod = $false
 $Kinds = $null
+$EditSummary = $null
 $ForceOverwrite = $false
 $Rest = [System.Collections.ArrayList]@()
 for ($i = 0; $i -lt $args.Count; $i++) {
@@ -32,6 +33,9 @@ for ($i = 0; $i -lt $args.Count; $i++) {
     } elseif ($a -eq "--kinds" -and ($i + 1) -lt $args.Count) {
         $i++
         $Kinds = $args[$i]
+    } elseif ($a -eq "--edit-summary" -and ($i + 1) -lt $args.Count) {
+        $i++
+        $EditSummary = $args[$i]
     } elseif ($a -eq "--force-overwrite" -or $a -eq "--force") {
         $ForceOverwrite = $true
     } else {
