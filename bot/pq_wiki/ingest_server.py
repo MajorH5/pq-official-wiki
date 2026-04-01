@@ -51,6 +51,24 @@ def _parse_force_overwrite_query() -> bool:
     return False
 
 
+def _parse_edit_summary_query() -> str | None:
+    """
+    Optional MediaWiki edit summary for this ingest run (?edit_summary= or ?editSummary=).
+    Truncated to 500 chars. Empty/absent means use default / PQ_EDIT_SUMMARY.
+    """
+    for name in ("edit_summary", "editSummary"):
+        v = request.args.get(name)
+        if v is None:
+            continue
+        s = str(v).strip()
+        if not s:
+            return None
+        if len(s) > 500:
+            s = s[:500]
+        return s
+    return None
+
+
 @app.route("/health", methods=["GET"])
 def health():
     return {"status": "ok"}
