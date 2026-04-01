@@ -193,6 +193,18 @@ final class SpecialPQProfile extends SpecialPage {
 		$show = self::resolveVisibility( $viewer, $target, $isProfileOwner, $viewerRobloxId, $robloxId );
 		$lookup = PqRobloxLookupIndex::instance();
 
+		if ( !$isEmbed
+			&& $linkedWikiId === null
+			&& $viewer->isRegistered()
+			&& $viewerRobloxId === null
+		) {
+			$out->addHTML( Html::rawElement(
+				'div',
+				[ 'class' => 'pq-roblox-profile-unlinked-hint' ],
+				$this->msg( 'pqroblox-profile-unlinked-link-hint' )->parseAsBlock()
+			) );
+		}
+
 		RobloxProfileRenderer::render(
 			$out,
 			$this->getContext(),

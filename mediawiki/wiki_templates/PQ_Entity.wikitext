@@ -3,9 +3,11 @@
 
 Do not wrap large parameters in <code>#if</code>: ParserFunctions split on <code>|</code>. Template args escape <code>|</code> as <code>{{!}}</code>, so the bot uses <b>HTML</b> <code>&lt;table class=&quot;wikitable&quot;&gt;</code> for statistics, loot, and attacks (not wikitext <code>{{!}}</code> tables). The bot omits empty sections.
 
+Optional <code>|notes=</code> — body text under the fixed <code>== Notes ==</code> heading below (do not put <code>== Notes ==</code> in the parameter value — <code>=</code> there can confuse the parser).
+
 Optional blocks (<code>found_in</code> through <code>attacks</code>) are written on one line so omitted parameters do not insert blank lines. The bot ends each non-empty block with a newline.
 </noinclude>{{{icon|}}}{{{statistics|}}}
 == Notes ==
-<!-- Add editor notes/history here. -->
+{{{notes|}}}
 {{{found_in|}}}{{{event_biomes|}}}{{{speeches|}}}{{{spawns|}}}{{{loot|}}}{{{attacks|}}}
 {{{categories|}}}

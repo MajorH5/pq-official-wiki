@@ -3,10 +3,19 @@ from __future__ import annotations
 import pywikibot
 
 from pq_wiki.drop_sources import ItemDropSource, format_item_drop_sources_wikitext
-from pq_wiki.renderers.entity_renderer import _found_in_location_cell, _format_status_effects, _link_image_wikitext
+from pq_wiki.renderers.entity_renderer import (
+    _found_in_location_cell,
+    _format_status_effects,
+    _link_image_wikitext,
+    _loot_chest_fragment_id,
+)
 from pq_wiki.renderers.shared import fmt_range, green, link_entity, signed_delta
 from pq_wiki.texture_names import entity_sprite_base, item_sprite_base, tier_icon_filename_base
-from pq_wiki.texture_service import upload_projectile_sprite, upload_sprite_if_possible
+from pq_wiki.texture_service import (
+    upload_chest_variant_sprite,
+    upload_projectile_sprite,
+    upload_sprite_if_possible,
+)
 from pq_wiki.seo import first_wiki_filename_from_file_wikitext, plain_text_for_seo, wiki_seo_block
 from pq_wiki.valor_icon import valor_label
 from pq_wiki.wikitext_util import (
@@ -26,6 +35,39 @@ def _categories_from_hierarchy(hier: list) -> list[str]:
         if h and h != "Item":
             out.append(h)
     return out
+
+
+def _loot_chest_parent_go(entity_id_to_go: dict[int, dict] | None) -> tuple[int, dict] | None:
+    """GameObject that owns ChestInfo (prefer id 497)."""
+    if not entity_id_to_go:
+        return None
+    g497 = entity_id_to_go.get(497)
+    if g497 and isinstance(g497.get("ChestInfo"), list) and g497["ChestInfo"]:
+        return (497, g497)
+    for eid, g in sorted(entity_id_to_go.items(), key=lambda x: x[0]):
+        ci = g.get("ChestInfo")
+        if isinstance(ci, list) and ci:
+            return (int(eid), g)
+    return None
+
+
+def _chest_item_shows_variant_spawns_row(
+    item: dict,
+    hier_set: set[str],
+    entity_id_to_go: dict[int, dict] | None,
+    entity_id_to_path: dict[int, str] | None,
+) -> bool:
+    """Chest items with ChestId + Loot Chest parent use one Spawns row (variant link), not Object Spawner's."""
+    if "Chest" not in hier_set or not entity_id_to_go or entity_id_to_path is None:
+        return False
+    raw = item.get("ChestId")
+    if raw is None:
+        return False
+    try:
+        int(raw)
+    except (TypeError, ValueError):
+        return False
+    return _loot_chest_parent_go(entity_id_to_go) is not None
 
 
 def _normalized_tier_label(raw_tier: object) -> str:
@@ -54,6 +96,7 @@ def build_item_wikitext(
     status_effect_icons: dict[str, str] | None = None,
     status_effect_name_to_path: dict[str, str] | None = None,
     valor_icon_wikitext: str | None = None,
+    game_textures: dict[str, object] | None = None,
 ) -> str:
     tier = item.get("Tier", "")
     hier = item.get("TypeHierarchy") or []
@@ -148,6 +191,7 @@ def build_item_wikitext(
         entity_id_to_go,
         status_effect_icons,
         status_effect_name_to_path,
+        game_textures,
     )
 
     triggers = _format_trigger_descriptions(item.get("TriggerDescriptions"))
@@ -297,13 +341,14 @@ def build_item_wikitext(
             ("head", head),
             ("icon", icon),
             ("desc", desc_block),
+            ("notes", ""),
             ("information", information_table),
             ("on_equip", on_equip_block),
             ("weapon", weapon_block),
             ("dropped_by", dropped_by_block),
             ("categories", categories_block),
         ],
-        always_emit_keys=frozenset({"head"}),
+        always_emit_keys=frozenset({"head", "notes"}),
     )
     item_name = str(item.get("Name") or f"Item {item.get('Id')}")
     desc_plain = plain_text_for_seo(desc)
@@ -597,6 +642,7 @@ def _append_type_specific_rows(
     entity_id_to_go: dict[int, dict] | None,
     status_effect_icons: dict[str, str] | None,
     status_effect_name_to_path: dict[str, str] | None = None,
+    game_textures: dict[str, object] | None = None,
 ) -> None:
     if "Clover" in hier_set:
         if item.get("LuckBoost") is not None:
@@ -737,6 +783,9 @@ def _append_type_specific_rows(
             except (TypeError, ValueError):
                 pass
     if "Object Spawner" in hier_set:
+        skip_object_spawner_spawns = _chest_item_shows_variant_spawns_row(
+            item, hier_set, entity_id_to_go, entity_id_to_path
+        )
         tid = item.get("TargetObjectId")
         go_obj: dict | None = None
         if tid is not None and entity_id_to_go:
@@ -745,17 +794,18 @@ def _append_type_specific_rows(
                 go_obj = entity_id_to_go.get(tii)
             except (TypeError, ValueError):
                 go_obj = None
-        if go_obj:
-            info_rows.append(
-                ("Spawns", _format_entity_link_with_sprite(site, go_obj, version, entity_id_to_path)),
-            )
-        elif item.get("ObjectName") and go_name_to_id and entity_id_to_path is not None:
-            oname = str(item.get("ObjectName"))
-            info_rows.append(
-                ("Spawns", link_entity(oname, go_name_to_id, entity_id_to_path)),
-            )
-        elif item.get("ObjectName"):
-            info_rows.append(("Spawns", str(item.get("ObjectName"))))
+        if not skip_object_spawner_spawns:
+            if go_obj:
+                info_rows.append(
+                    ("Spawns", _format_entity_link_with_sprite(site, go_obj, version, entity_id_to_path)),
+                )
+            elif item.get("ObjectName") and go_name_to_id and entity_id_to_path is not None:
+                oname = str(item.get("ObjectName"))
+                info_rows.append(
+                    ("Spawns", link_entity(oname, go_name_to_id, entity_id_to_path)),
+                )
+            elif item.get("ObjectName"):
+                info_rows.append(("Spawns", str(item.get("ObjectName"))))
         ol = item.get("ObjectLifetime")
         if ol is not None:
             try:
@@ -763,6 +813,30 @@ def _append_type_specific_rows(
                     info_rows.append(("Object lifetime", f"{fmt_num(ol)} sec"))
             except (TypeError, ValueError):
                 pass
+    if "Chest" in hier_set and entity_id_to_go and entity_id_to_path is not None:
+        cid_raw = item.get("ChestId")
+        if cid_raw is not None:
+            try:
+                chest_spawn_id = int(cid_raw)
+            except (TypeError, ValueError):
+                chest_spawn_id = None
+            if chest_spawn_id is not None:
+                parent = _loot_chest_parent_go(entity_id_to_go)
+                if parent:
+                    lc_eid, _lc_go = parent
+                    path = entity_id_to_path.get(lc_eid)
+                    frag = _loot_chest_fragment_id(chest_spawn_id)
+                    oname = str(item.get("ObjectName") or "").strip()
+                    link_label = oname if oname else "Chest variant"
+                    link = f"[[{path}#{frag}|{link_label}]]" if path else link_label
+                    tex = game_textures if isinstance(game_textures, dict) else None
+                    spr_icon = upload_chest_variant_sprite(site, chest_spawn_id, tex, version)
+                    cell = link
+                    if spr_icon and path:
+                        spr_icon = _link_image_wikitext(spr_icon, f"{path}#{frag}")
+                    if spr_icon:
+                        cell = f'{spr_icon} <span style="vertical-align:middle">{link}</span>'
+                    info_rows.append(("Spawns", cell))
 
 
 def _stat_icon(name: str, stat_icons: dict[str, str] | None) -> str:

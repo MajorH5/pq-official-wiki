@@ -3,6 +3,14 @@
 #   .\post_dump.ps1 [dump.json]
 #   .\post_dump.ps1 --prod [dump.json]
 #   .\post_dump.ps1 --kinds skins,quests [dump.json]
+#   .\post_dump.ps1 --kinds items:Chest [dump.json]   # TypeHierarchy exact string "Chest"
+#   .\post_dump.ps1 --kinds items:634 [dump.json]    # single item by Id
+#   .\post_dump.ps1 --kinds locations:634 [dump.json]   # single location by Id
+#   .\post_dump.ps1 --kinds "locations:Cherry Blossom" [dump.json]   # exact location Name (quote if spaces)
+#   .\post_dump.ps1 --kinds biomes:2 [dump.json]   # single biome by Id
+#   .\post_dump.ps1 --kinds "biomes:Cherry Blossom" [dump.json]   # exact biome Name (quote if spaces)
+#   .\post_dump.ps1 --kinds entities:497 [dump.json]   # single entity by Id (or entities:Name for exact name)
+#   .\post_dump.ps1 --kinds skins:Tank [dump.json]   # skin named Tank (or skins:123 for id)
 # Env: $env:DATADUMP_INGEST_SECRET
 #      $env:INGEST_URL (optional; default http://localhost:8081/ingest; ignored when --prod)
 
@@ -47,10 +55,11 @@ if (-not (Test-Path $Dump)) {
 }
 
 if ($Kinds) {
-    if ($Url -like "*`?*") {
-        $Url = "$Url&kinds=$Kinds"
+    $KindsEnc = [System.Uri]::EscapeDataString($Kinds)
+    if ($Url.Contains("?")) {
+        $Url = "$Url&kinds=$KindsEnc"
     } else {
-        $Url = "$Url`?kinds=$Kinds"
+        $Url = "$Url`?kinds=$KindsEnc"
     }
 }
 

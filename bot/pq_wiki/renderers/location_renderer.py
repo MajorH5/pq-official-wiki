@@ -154,13 +154,14 @@ def build_location_wikitext(
             ("portal_table", portal_table),
             ("ost_youtube", ost_youtube),
             ("ost_caption", ost_caption),
+            ("notes", ""),
             ("map_section", map_section),
             ("screenshots_section", screenshots_section),
             ("found_entities", found_entities_block),
             ("dropped_from", dropped_from_block),
             ("categories", categories_block),
         ],
-        always_emit_keys=frozenset({"ost_youtube", "ost_caption"}),
+        always_emit_keys=frozenset({"ost_youtube", "ost_caption", "notes"}),
     )
     seo = wiki_seo_block(
         site,

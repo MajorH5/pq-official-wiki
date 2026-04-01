@@ -71,18 +71,19 @@ def _upload_skin_animation_gif(
     except Exception:
         return ""
     data = normalize_gif_bytes_for_imagemagick(data)
-    sz = anim.get("Size") or {}
-    fw = int(sz.get("X") or sz.get("x") or 50)
-    fh = int(sz.get("Y") or sz.get("y") or fw)
     sid = int(skin.get("Id") or 0)
     sname = str(skin.get("Name") or f"Skin {sid}")
+    # Do not pass thumb_size from anim Size — that is the grid cell, not the rendered frame
+    # size when FrameSizes multipliers apply. Wrong px in [[File:…|Npx]] forces MediaWiki to
+    # scale down (e.g. 50px thumb for a 100px GIF). Let upload_raw_bytes_named use the GIF's
+    # actual pixel width from the file bytes.
     w = upload_raw_bytes_named(
         site,
         data,
         "gif",
         skin_animation_base(sid, sname, anim_key),
         version,
-        thumb_size=max(1, max(fw, fh)),
+        thumb_size=None,
     )
     return w
 

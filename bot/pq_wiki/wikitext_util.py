@@ -58,14 +58,36 @@ def html_to_wikitext(s: Optional[str]) -> str:
 
 
 def fmt_num(n: Any) -> str:
+    """
+    Format numbers for wiki tables. Whole integers use thousands separators (e.g. 40,050).
+    Non-integer floats keep up to 4 decimal places without comma grouping.
+    """
     if n is None:
         return ""
+    if isinstance(n, bool):
+        return str(n)
+    if isinstance(n, int):
+        return f"{n:,}"
     if isinstance(n, float):
         if abs(n - round(n)) < 1e-9:
-            return str(int(round(n)))
+            return f"{int(round(n)):,}"
         s = f"{n:.4f}".rstrip("0").rstrip(".")
         return s
-    return str(n)
+    s = str(n).strip()
+    if not s:
+        return ""
+    try:
+        if "." not in s and "e" not in s.lower():
+            return f"{int(s):,}"
+    except ValueError:
+        pass
+    try:
+        f = float(s)
+        if abs(f - round(f)) < 1e-9:
+            return f"{int(round(f)):,}"
+    except ValueError:
+        pass
+    return s
 
 
 _DEF_PEN_STYLE = "color:#e85d04;font-weight:bold"

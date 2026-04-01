@@ -13,6 +13,7 @@ final class PqRobloxTextureNames {
 		2 => 'tier_pixelween',
 		8 => 'tier_pixelmas',
 		9 => 'tier_gamemode',
+		10 => 'tier_corrupted',
 	];
 
 	public static function slug( string $text ): string {

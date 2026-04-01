@@ -10,6 +10,8 @@ from pq_wiki.renderers.location_renderer import (
     _sort_entity_names_by_tag,
 )
 from pq_wiki.seo import first_wiki_filename_from_file_wikitext, wiki_seo_block
+from pq_wiki.texture_names import biome_sprite_base
+from pq_wiki.texture_service import upload_sprite_if_possible
 from pq_wiki.wikitext_util import template_invocation
 
 _COMMONS_PLACEHOLDER_FILE = "No image available-4x.png"
@@ -68,6 +70,7 @@ def build_biome_wikitext(
     entity_name_to_go: dict[str, dict] | None,
     location_name_to_path: dict[str, str] | None,
     difficulty_skull_icon: str = "",
+    extra_found_entity_names: list[str] | None = None,
 ) -> str:
     bid = int(biome["Id"])
     name = str(biome.get("Name") or f"Biome {bid}")
@@ -75,15 +78,37 @@ def build_biome_wikitext(
     overworld_path = (location_name_to_path or {}).get(OVERWORLD_LOCATION_NAME)
     overworld_line = _overworld_line(overworld_path)
 
+    # Native pixel size + pq-pixel-sprite wrapper — same idea as location portal_image (no thumb/caption).
+    biome_lead_img = upload_sprite_if_possible(
+        site,
+        biome.get("Sprite"),
+        version,
+        thumb_size=None,
+        logical_name=biome_sprite_base(bid, name),
+    )
+    biome_image_block = biome_lead_img
+
     difficulty = _difficulty_display(biome.get("Difficulty"), difficulty_skull_icon)
 
     map_section = _build_biome_map_section(name)
     screenshots_section = _build_biome_screenshots_section(name)
 
     found_entities_block = ""
-    found = biome.get("FoundGameObjects") or []
+    raw_found = [str(n) for n in (biome.get("FoundGameObjects") or []) if n]
+    extras = [str(n) for n in (extra_found_entity_names or []) if str(n).strip()]
+    seen_names: set[str] = set()
+    merged_found: list[str] = []
+    for n in raw_found:
+        if n not in seen_names:
+            seen_names.add(n)
+            merged_found.append(n)
+    for n in extras:
+        if n not in seen_names:
+            seen_names.add(n)
+            merged_found.append(n)
+    found = merged_found
     if found:
-        found_names = _sort_entity_names_by_tag([str(n) for n in found], entity_name_to_go)
+        found_names = _sort_entity_names_by_tag(found, entity_name_to_go)
         found_names = [n for n in found_names if _entity_resolves_to_page(n, go_name_to_id, entity_id_to_path)]
         if found_names:
             fe_cells = [
@@ -97,11 +122,14 @@ def build_biome_wikitext(
     cat_lines = ["[[Category:Biomes]]"]
     categories_block = "\n".join(cat_lines)
 
-    seo_image_fname = first_wiki_filename_from_file_wikitext(map_section)
+    seo_image_fname = first_wiki_filename_from_file_wikitext(biome_lead_img) or first_wiki_filename_from_file_wikitext(
+        map_section
+    )
 
     body = template_invocation(
         "PQ Biome",
         [
+            ("biome_image", biome_image_block),
             ("overworld_line", overworld_line),
             ("difficulty", difficulty),
             ("map_section", map_section),

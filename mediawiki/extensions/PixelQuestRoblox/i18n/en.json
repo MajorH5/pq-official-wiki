@@ -71,6 +71,7 @@
 	"pqroblox-profile-not-linked": "User \"$1\" has not linked a Pixel Quest account.",
 	"pqroblox-profile-user-not-found": "Wiki user not found.",
 	"pqroblox-profile-not-found-roblox": "Roblox user not found.",
+	"pqroblox-profile-unlinked-link-hint": "This Pixel Quest profile is not linked to a wiki account. If you own this profile, you can [[Special:LinkRobloxAccount|link your wiki account here]].",
 	"pqroblox-api-error-bad-username": "Invalid username (too long).",
 	"pqroblox-recaptcha-failed": "reCAPTCHA verification failed. Try again.",
 	"pqroblox-profile-prefs-hint": "Control what others see in [[Special:Preferences#mw-prefsection-pqroblox|Preferences → Pixel Quest Profile]].",

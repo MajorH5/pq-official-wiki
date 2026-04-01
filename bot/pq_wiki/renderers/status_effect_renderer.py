@@ -46,6 +46,7 @@ def _section_inner_wikitext(
     name = _effect_display_name(effect)
     positive = bool(effect.get("IsPositiveEffect"))
     effect_type = "Positive" if positive else "Negative"
+    stackable = "Yes" if bool(effect.get("IsStackable")) else "No"
 
     icon_w = ""
     loaded = load_status_effect_atlas(datadump)
@@ -74,7 +75,7 @@ def _section_inner_wikitext(
             desc_line = f"<br>''{desc_plain}''"
 
     icon_block = f"{icon_w}{desc_line}"
-    details = wikitable([("Type", effect_type)])
+    details = wikitable([("Type", effect_type), ("Stackable", stackable)])
     return f"{icon_block}\n\n{details}"
 
 

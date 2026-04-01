@@ -1,29 +1,61 @@
 <noinclude>
+
 '''PQ Location layout''' — transcluded by location pages. Edit to change all location pages.
+
+
 
 Section headings for Found entities / Dropped from are included in the bot output. Do not wrap parameters in <code>#if</code> if they may contain <code>|</code> (links, tables).
 
+
+
+Optional <code>|notes=</code> — body under the fixed <code>== Notes ==</code> heading (avoid putting <code>== Notes ==</code> in the parameter value).
+
+
+
 '''Dungeon OST:''' Typical dungeons include <code>|ost_youtube=</code> and <code>|ost_caption=</code> (dungeon name + composer link). Bot-generated pages always include these empty parameters as placeholders so you can fill them in without editing the template. Set <code>|ost_youtube=</code> to a YouTube '''video ID''' or full watch URL; a '''right-floated framed player''' appears only when non-empty. Requires Extension:EmbedVideo (<code>{{#ev:youtube|…}}</code>).
+
 </noinclude>
+
 {{{portal_image|}}}
+
+
 
 {{{portal_table|}}}
 
+
+
 {{#if:{{{difficulty|}}}|'''Difficulty''' {{{difficulty|}}}
 
+
+
 }}
+
 {{#if:{{{ost_youtube|}}}|<div class="pq-location-ost" style="float:right; clear:right; margin:0 0 0.75em 1em; max-width:min(360px, 100%);">{{#ev:youtube|{{{ost_youtube}}}|340||{{{ost_caption|}}}|frame}}</div>
+
 }}
+
 == Notes ==
-<!-- Add editor notes/history here. -->
+{{{notes|}}}
+
+
 
 {{{map_section|}}}
 
+
+
 {{{screenshots_section|}}}
+
+
 
 {{{found_entities|}}}
 
+
+
 {{{dropped_from|}}}
 
+
+
 {{{categories|}}}
+
+
 

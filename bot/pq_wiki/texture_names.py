@@ -18,6 +18,7 @@ TIER_ROW_TO_THEME: dict[int, str] = {
     2: "tier_pixelween",
     8: "tier_pixelmas",
     9: "tier_gamemode",
+    10: "tier_corrupted",
 }
 
 
@@ -105,6 +106,13 @@ def loot_drop_base(kind: str, tier: int) -> str:
     return sanitize_base(f"drop_{k}_{tier}")
 
 
+def chest_variant_sprite_base(chest_id: int) -> str:
+    """Stable upload name for ITEM_SPAWNS_* crop (negative ids use n prefix)."""
+    if chest_id < 0:
+        return sanitize_base(f"pq_chest_variant_n{abs(chest_id)}")
+    return sanitize_base(f"pq_chest_variant_{chest_id}")
+
+
 def skin_rarity_base(rarity: int) -> str:
     return sanitize_base(f"skin_rarity_{rarity}")
 
@@ -149,6 +157,10 @@ def biome_minimap_base(biome_slug: str) -> str:
 
 def biome_screenshot_base(biome_slug: str, index: int) -> str:
     return sanitize_base(f"biome_{biome_slug}_screenshot_{index}")
+
+
+def biome_sprite_base(biome_id: int, biome_name: str) -> str:
+    return sanitize_base(f"biome_{slug(biome_name)}_{biome_id}")
 
 
 def game_object_sprite_base(go_id: int, name: str) -> str:

@@ -13,7 +13,7 @@ Bot uploads and the MediaWiki `PixelQuestRoblox` extension resolve **the same se
 | Kind | Pattern | Example |
 |------|---------|---------|
 | Item main sprite | `item_{slug(name)}_{id}.{png\|gif}` | `item_forbidden-dagger_353.png` |
-| Item tier corner (TierIcon strip) | `{tier_theme}.{png\|gif}` | `tier_star.png` — theme from **first animation frame row** in `Frames[0][1]`: `0→tier_star`, `2→tier_pixelween`, `8→tier_pixelmas`, `9→tier_gamemode`, else `tier_row_{n}` |
+| Item tier corner (TierIcon strip) | `{tier_theme}.{png\|gif}` | `tier_star.png` — theme from **first animation frame row** in `Frames[0][1]`: `0→tier_star`, `2→tier_pixelween`, `8→tier_pixelmas`, `9→tier_gamemode`, `10→tier_corrupted`, else `tier_row_{n}` |
 | Projectile | `projectile_px_{hash16}.{png\|gif}` | `projectile_px_a1b2c3d4e5f67890.png` — **`hash16`** = first 16 hex chars of SHA-256 of the **uploaded file bytes** (after GIF normalization). Same pixels ⇒ one file even if asset id / datadump JSON changes. Local cache still keys off a JSON signature (`projectile_tex_*` / `projectile_{hash12}`) to skip re-render. |
 | Skin sheet preview | `skin_{slug}_{id}_sprite.{png\|gif}` | `skin_crusader_1_sprite.png` |
 | Skin animation GIF | `skin_{slug}_{id}_{anim_key}.gif` | `skin_crusader_1_e_idle.gif` |

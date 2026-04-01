@@ -7,13 +7,19 @@ from pq_wiki.renderers.shared import fmt_range, format_drop
 from pq_wiki.seo import first_wiki_filename_from_file_wikitext, wiki_seo_block
 from pq_wiki.skin_drops import format_skin_drop_cell
 from pq_wiki.texture_names import (
+    biome_sprite_base,
     entity_sprite_base,
     item_sprite_base,
     portal_preview_base,
     slug,
     tier_icon_filename_base,
 )
-from pq_wiki.texture_service import upload_portal_preview, upload_projectile_sprite, upload_sprite_if_possible
+from pq_wiki.texture_service import (
+    upload_chest_variant_sprite,
+    upload_portal_preview,
+    upload_projectile_sprite,
+    upload_sprite_if_possible,
+)
 from pq_wiki.wikitext_util import (
     defense_penetration_attack_line_html,
     fmt_num,
@@ -42,6 +48,95 @@ def _html_statistics_table(rows: list[tuple[str, str]]) -> str:
     return "\n".join(lines)
 
 
+def _loot_chest_fragment_id(chest_id: int) -> str:
+    """Stable URL fragment for wikilinks to a variant on the Loot Chest entity page."""
+    return f"pq-chest-{int(chest_id)}"
+
+
+def _chest_info_list(go: dict) -> list[dict]:
+    raw = go.get("ChestInfo")
+    if not isinstance(raw, list) or not raw:
+        return []
+    return [x for x in raw if isinstance(x, dict)]
+
+
+def _build_chest_id_object_names(item_id_to_item: dict[int, dict] | None) -> dict[int, str]:
+    """Map ChestId → ObjectName from chest items (first item wins per id)."""
+    if not item_id_to_item:
+        return {}
+    out: dict[int, str] = {}
+    for iid in sorted(item_id_to_item.keys()):
+        it = item_id_to_item[iid]
+        raw = it.get("ChestId")
+        if raw is None:
+            continue
+        try:
+            k = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if k in out:
+            continue
+        on = it.get("ObjectName")
+        if isinstance(on, str) and on.strip():
+            out[k] = on.strip()
+    return out
+
+
+def _chest_spawn_id_to_item_meta(
+    item_id_to_item: dict[int, dict] | None,
+    item_id_to_path: dict[int, str],
+) -> dict[int, tuple[str, str, int]]:
+    """
+    ChestId (spawn id) → (item wiki path, link label, item id) for Chest-type items.
+    First matching item per ChestId (same rule as variant headings / item Spawns row).
+    """
+    if not item_id_to_item:
+        return {}
+    out: dict[int, tuple[str, str, int]] = {}
+    for iid in sorted(item_id_to_item.keys()):
+        it = item_id_to_item[iid]
+        hier = {str(h) for h in (it.get("TypeHierarchy") or [])}
+        if "Chest" not in hier:
+            continue
+        raw = it.get("ChestId")
+        if raw is None:
+            continue
+        try:
+            cid = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if cid in out:
+            continue
+        path = item_id_to_path.get(iid)
+        if not path:
+            continue
+        on = it.get("ObjectName")
+        if isinstance(on, str) and on.strip():
+            label = on.strip()
+        else:
+            nm = it.get("Name")
+            label = str(nm).strip() if nm else f"Item {iid}"
+        out[cid] = (path, label, iid)
+    return out
+
+
+def _flex_sprite_and_side_row(left_wikitext: str, right_wikitext: str) -> str:
+    """Left sprite block + optional right column (e.g. location portal + dungeon key)."""
+    p = left_wikitext.strip()
+    k = right_wikitext.strip()
+    if p and k:
+        return (
+            '<div style="display:flex; flex-wrap:wrap; align-items:center; gap:16px; margin:0.35em 0;">'
+            f"{p}{k}"
+            "</div>"
+        )
+    if p:
+        return f'<p style="margin:0.35em 0">{p}</p>'
+    if k:
+        return f'<p style="margin:0.35em 0">{k}</p>'
+    return ""
+
+
 def build_entity_wikitext(
     site: pywikibot.Site,
     go: dict,
@@ -54,6 +149,8 @@ def build_entity_wikitext(
     location_name_to_path: dict[str, str] | None = None,
     location_name_to_portal: dict[str, dict] | None = None,
     entity_name_to_locations: dict[str, list[str]] | None = None,
+    biome_name_to_path: dict[str, str] | None = None,
+    biome_name_to_biome: dict[str, dict] | None = None,
     drop_tier_icon_parts: dict[int, dict[str, str]] | None = None,
     stat_icons: dict[str, str] | None = None,
     status_effect_icons: dict[str, str] | None = None,
@@ -63,6 +160,7 @@ def build_entity_wikitext(
     skin_id_to_skin: dict[int, dict] | None = None,
     skin_id_to_path: dict[int, str] | None = None,
     skin_rarity_icon_wikitext: dict[int, str] | None = None,
+    game_textures: dict[str, object] | None = None,
 ) -> str:
     gid = go["Id"]
     name = go.get("Name", f"Entity {gid}")
@@ -74,10 +172,14 @@ def build_entity_wikitext(
         or go.get("IsWorldBoss")
     )
 
-    icon = upload_sprite_if_possible(
-        site, go.get("Sprite"), version, logical_name=entity_sprite_base(gid, str(name))
-    )
-
+    chest_infos = _chest_info_list(go)
+    # Root "Loot Chest" has no in-world sprite without a variant; only show lead icon for normal entities.
+    if chest_infos:
+        icon = ""
+    else:
+        icon = upload_sprite_if_possible(
+            site, go.get("Sprite"), version, logical_name=entity_sprite_base(gid, str(name))
+        )
     hp = go.get("Health")
     stats = go.get("Stats") or {}
     df = stats.get("Defense")
@@ -106,9 +208,18 @@ def build_entity_wikitext(
 
     event_biomes = go.get("EventBiomes") or []
     if event_biomes:
-        event_biomes_str = "<h2>Event biomes</h2>\n" + ", ".join(
-            _link_location_name(str(b), location_name_to_path) for b in event_biomes
-        )
+        event_cells = [
+            _event_biome_cell(
+                site,
+                str(b),
+                version,
+                biome_name_to_path,
+                biome_name_to_biome,
+            )
+            for b in event_biomes
+            if str(b).strip()
+        ]
+        event_biomes_str = "<h2>Event biomes</h2>\n" + ", ".join(event_cells) if event_cells else ""
     else:
         event_biomes_str = ""
 
@@ -131,25 +242,47 @@ def build_entity_wikitext(
     )
     if imm_txt:
         st_rows.append(("Immunity", imm_txt))
-    statistics_table = _html_statistics_table(st_rows) if st_rows else ""
+    if chest_infos:
+        statistics_table = ""
+    else:
+        statistics_table = _html_statistics_table(st_rows) if st_rows else ""
 
     private_drops = go.get("PrivateDrops") or []
     public_drops = go.get("PublicDrops") or []
     drops = [*private_drops, *public_drops]
-    loot_block = _build_loot_section_wikitext(
-        site,
-        go,
-        drops,
-        version,
-        item_name_to_id,
-        item_id_to_path,
-        item_id_to_item,
-        go_name_to_id,
-        drop_tier_icon_parts,
-        skin_id_to_skin=skin_id_to_skin,
-        skin_id_to_path=skin_id_to_path,
-        skin_rarity_icon_wikitext=skin_rarity_icon_wikitext,
-    )
+    if chest_infos:
+        loot_block = _build_loot_chest_variants_wikitext(
+            site,
+            go,
+            chest_infos,
+            version,
+            item_name_to_id,
+            item_id_to_path,
+            item_id_to_item,
+            go_name_to_id,
+            drop_tier_icon_parts,
+            skin_id_to_skin=skin_id_to_skin,
+            skin_id_to_path=skin_id_to_path,
+            skin_rarity_icon_wikitext=skin_rarity_icon_wikitext,
+            stat_icons=stat_icons,
+            chest_titles=_build_chest_id_object_names(item_id_to_item),
+            game_textures=game_textures,
+        )
+    else:
+        loot_block = _build_loot_section_wikitext(
+            site,
+            go,
+            drops,
+            version,
+            item_name_to_id,
+            item_id_to_path,
+            item_id_to_item,
+            go_name_to_id,
+            drop_tier_icon_parts,
+            skin_id_to_skin=skin_id_to_skin,
+            skin_id_to_path=skin_id_to_path,
+            skin_rarity_icon_wikitext=skin_rarity_icon_wikitext,
+        )
 
     projs = go.get("ProjectileDescriptors") or []
     attacks_block = _build_attacks_section_wikitext(
@@ -176,33 +309,42 @@ def build_entity_wikitext(
         cat_lines.append("[[Category:NPCs]]")
     if unreleased:
         cat_lines.append("[[Category:Unreleased]]")
+    if chest_infos:
+        cat_lines.append("[[Category:Loot chests]]")
     categories_block = "\n".join(cat_lines)
 
     body = template_invocation(
         "PQ Entity",
         [
             ("icon", _trailing_nl(icon) if icon else ""),
+            ("statistics", _trailing_nl(statistics_table)),
+            ("notes", ""),
             ("found_in", _trailing_nl(found_in_str)),
             ("event_biomes", _trailing_nl(event_biomes_str)),
-            ("statistics", _trailing_nl(statistics_table)),
             ("speeches", _trailing_nl(speeches_block)),
             ("spawns", _trailing_nl(spawns_block)),
             ("loot", _trailing_nl(loot_block)),
             ("attacks", _trailing_nl(attacks_block)),
             ("categories", categories_block),
         ],
+        always_emit_keys=frozenset({"notes"}),
     )
+    if chest_infos:
+        body = f'<div class="pq-loot-chest-root">\n{body}\n</div>'
     if is_boss:
         seo_desc = f"{name} — boss in Pixel Quest."
     elif hostile:
         seo_desc = f"{name} — enemy in Pixel Quest."
     else:
         seo_desc = f"{name} — friendly NPC in Pixel Quest."
+    seo_image = first_wiki_filename_from_file_wikitext(icon) if icon else None
+    if chest_infos and not seo_image:
+        seo_image = first_wiki_filename_from_file_wikitext(loot_block)
     seo = wiki_seo_block(
         site,
         page_title=name,
         description=seo_desc,
-        wiki_image_filename=first_wiki_filename_from_file_wikitext(icon),
+        wiki_image_filename=seo_image,
         image_alt=f"{name} sprite",
     )
     return f"{body}\n\n{seo}"
@@ -346,6 +488,146 @@ def _layout_drops_multicolumn(
     )
 
 
+def _loot_tier_column_part(go: dict, tier_icon_kind: str | None) -> str:
+    """Which loot UI column (chest vs bag) to use for tier strip icons."""
+    if tier_icon_kind == "chest":
+        return "chest"
+    if tier_icon_kind == "bag":
+        return "bag"
+    is_boss = bool(
+        go.get("IsBiomeBoss")
+        or go.get("IsTroomBoss")
+        or go.get("IsDungeonBoss")
+        or go.get("IsWorldBoss")
+    )
+    return "chest" if is_boss else "bag"
+
+
+def _build_loot_chest_variants_wikitext(
+    site: pywikibot.Site,
+    go: dict,
+    chest_infos: list[dict],
+    version: str,
+    item_name_to_id: dict[str, int],
+    item_id_to_path: dict[int, str],
+    item_id_to_item: dict[int, dict] | None,
+    go_name_to_id: dict[str, int],
+    drop_tier_icon_parts: dict[int, dict[str, str]] | None,
+    skin_id_to_skin: dict[int, dict] | None = None,
+    skin_id_to_path: dict[int, str] | None = None,
+    skin_rarity_icon_wikitext: dict[int, str] | None = None,
+    stat_icons: dict[str, str] | None = None,
+    chest_titles: dict[int, str] | None = None,
+    game_textures: dict[str, object] | None = None,
+) -> str:
+    """
+    Loot Chest root entity: one section per ChestInfo entry (ChestId, ChestHealth, DropTable).
+    """
+    gid = int(go.get("Id") or 0)
+    ename = str(go.get("Name") or f"Entity {gid}")
+    titles = chest_titles or {}
+    tex = game_textures if isinstance(game_textures, dict) else None
+    spawn_item_meta = _chest_spawn_id_to_item_meta(item_id_to_item, item_id_to_path)
+
+    def sort_key(ci: dict) -> tuple[int, int]:
+        try:
+            return (0, int(ci.get("ChestId")))
+        except (TypeError, ValueError):
+            return (1, 0)
+
+    blocks: list[str] = ["<h2>Chest Variants</h2>"]
+    for ci in sorted(chest_infos, key=sort_key):
+        try:
+            chest_id = int(ci.get("ChestId"))
+        except (TypeError, ValueError):
+            continue
+        frag = _loot_chest_fragment_id(chest_id)
+        hp = ci.get("ChestHealth")
+        st_rows: list[tuple[str, str]] = []
+        if hp is not None:
+            st_rows.append(
+                (
+                    f"{_stat_icon('Health', stat_icons)} Health".strip(),
+                    f"{fmt_num(hp)} HP",
+                )
+            )
+        stats_html = _html_statistics_table(st_rows) if st_rows else ""
+        icon = upload_chest_variant_sprite(site, chest_id, tex, version)
+        if not icon:
+            spr = ci.get("Sprite")
+            if spr:
+                icon = upload_sprite_if_possible(
+                    site,
+                    spr,
+                    version,
+                    thumb_size=64,
+                    logical_name=entity_sprite_base(gid, f"{slug(str(ename))}-chest-{chest_id}"),
+                )
+        heading = titles.get(chest_id, f"Chest ({chest_id})")
+        heading_esc = html.escape(heading, quote=False)
+        lead_bits: list[str] = [
+            f'<h3 id="{html.escape(frag, quote=True)}">{heading_esc}</h3>',
+        ]
+        meta = spawn_item_meta.get(chest_id)
+        right_col = ""
+        if meta:
+            ipath, ilabel, iid = meta
+            link = f"[[{ipath}|{ilabel}]]"
+            kicon = ""
+            chest_it = item_id_to_item.get(iid) if item_id_to_item else None
+            if chest_it:
+                iname = str(chest_it.get("Name") or f"Item {iid}")
+                kicon = upload_sprite_if_possible(
+                    site,
+                    chest_it.get("Sprite"),
+                    version,
+                    thumb_size=40,
+                    logical_name=item_sprite_base(iid, iname),
+                )
+            if kicon and ipath:
+                kicon = _link_image_wikitext(kicon, ipath)
+            if kicon:
+                right_col = (
+                    '<span style="display:inline-flex; align-items:center; gap:8px;">'
+                    f"{kicon} {link}</span>"
+                )
+            else:
+                right_col = link
+        if icon or right_col:
+            left = icon
+            if icon and meta:
+                ipath, _, _ = meta
+                left = _link_image_wikitext(icon, ipath)
+            lead_bits.append(_flex_sprite_and_side_row(left or "", right_col))
+        if stats_html:
+            lead_bits.append(stats_html)
+        raw_drops = ci.get("DropTable")
+        drops: list = []
+        if isinstance(raw_drops, list):
+            drops = list(raw_drops)
+        loot_inner = _build_loot_section_wikitext(
+            site,
+            go,
+            drops,
+            version,
+            item_name_to_id,
+            item_id_to_path,
+            item_id_to_item,
+            go_name_to_id,
+            drop_tier_icon_parts,
+            skin_id_to_skin=skin_id_to_skin,
+            skin_id_to_path=skin_id_to_path,
+            skin_rarity_icon_wikitext=skin_rarity_icon_wikitext,
+            tier_icon_kind="chest",
+            loot_heading_level=0,
+        )
+        if not loot_inner.strip():
+            loot_inner = "<p><i>No drops listed.</i></p>"
+        lead_bits.append(loot_inner)
+        blocks.append("\n".join(lead_bits))
+    return "\n".join(blocks) if len(blocks) > 1 else ""
+
+
 def _build_loot_section_wikitext(
     site: pywikibot.Site,
     go: dict,
@@ -359,14 +641,30 @@ def _build_loot_section_wikitext(
     skin_id_to_skin: dict[int, dict] | None = None,
     skin_id_to_path: dict[int, str] | None = None,
     skin_rarity_icon_wikitext: dict[int, str] | None = None,
+    tier_icon_kind: str | None = None,
+    loot_heading_level: int = 2,
 ) -> str:
     if not drops:
         return ""
-    lines: list[str] = [
-        "<h2>Loot</h2>",
-        '<table class="wikitable">',
-        "<tr><th>Drop Type</th><th>Drop</th></tr>",
-    ]
+    loot_title = "Loot"
+    if loot_heading_level == 2:
+        head = f"<h2>{loot_title}</h2>"
+    elif loot_heading_level == 3:
+        head = f"<h3>{loot_title}</h3>"
+    else:
+        head = ""
+    lines: list[str] = (
+        [
+            head,
+            '<table class="wikitable">',
+            "<tr><th>Drop Type</th><th>Drop</th></tr>",
+        ]
+        if head
+        else [
+            '<table class="wikitable">',
+            "<tr><th>Drop Type</th><th>Drop</th></tr>",
+        ]
+    )
     normalized = _normalize_enemy_drops(
         drops,
         item_name_to_id,
@@ -377,12 +675,7 @@ def _build_loot_section_wikitext(
     for nd in normalized:
         tier = int(nd.get("drop_tier_type") or 0)
         groups.setdefault(tier, []).append(nd)
-    is_boss = bool(
-        go.get("IsBiomeBoss")
-        or go.get("IsTroomBoss")
-        or go.get("IsDungeonBoss")
-        or go.get("IsWorldBoss")
-    )
+    part = _loot_tier_column_part(go, tier_icon_kind)
     for tier in sorted(groups.keys(), reverse=True):
         entries = sorted(
             groups[tier],
@@ -411,7 +704,6 @@ def _build_loot_section_wikitext(
             continue
         group_icon = ""
         if drop_tier_icon_parts and tier in drop_tier_icon_parts:
-            part = "chest" if is_boss else "bag"
             group_icon = drop_tier_icon_parts[tier].get(part, "")
         drop_cell = _layout_drops_multicolumn(rendered_rows)
         lines.append(
@@ -868,6 +1160,43 @@ def _link_image_wikitext(img_wiki: str, page_path: str) -> str:
     if i == -1:
         return img_wiki
     return f"{img_wiki[:i]}|link={page_path}{img_wiki[i:]}"
+
+
+def _event_biome_cell(
+    site: pywikibot.Site,
+    biome_name: str,
+    version: str,
+    biome_name_to_path: dict[str, str] | None,
+    biome_name_to_biome: dict[str, dict] | None,
+) -> str:
+    """Biome wiki link + optional biome icon (same idea as location portal + link)."""
+    path = (biome_name_to_path or {}).get(biome_name)
+    link = f"[[{path}|{biome_name}]]" if path else biome_name
+    bio = (biome_name_to_biome or {}).get(biome_name) if biome_name_to_biome else None
+    icon = ""
+    if bio:
+        try:
+            bid = int(bio.get("Id") or 0)
+        except (TypeError, ValueError):
+            bid = 0
+        bnm = str(bio.get("Name") or biome_name)
+        spr = bio.get("Sprite")
+        if spr:
+            icon = upload_sprite_if_possible(
+                site,
+                spr,
+                version,
+                thumb_size=40,
+                logical_name=biome_sprite_base(bid, bnm),
+            )
+    if icon and path:
+        icon = _link_image_wikitext(icon, path)
+    if icon:
+        return (
+            '<span style="display:inline-flex; align-items:center; gap:8px;">'
+            f"{icon} {link}</span>"
+        )
+    return link
 
 
 def _found_in_location_cell(

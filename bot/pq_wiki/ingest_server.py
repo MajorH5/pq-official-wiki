@@ -15,7 +15,7 @@ import difflib
 
 from pq_wiki.config import DATADUMP_INGEST_SECRET, INGEST_HOST, INGEST_PORT
 from pq_wiki.import_log import get_import_logger
-from pq_wiki.import_runner import run_import
+from pq_wiki.import_runner import parse_kind_import_selection, run_import
 
 app = Flask(__name__)
 # Large pq-datadump.json files (set via env if needed)
@@ -36,12 +36,9 @@ def _auth_ok() -> bool:
     return False
 
 
-def _parse_kinds_arg() -> set[str] | None:
+def _parse_kinds_arg():
     raw = request.args.get("kinds", "")
-    if not raw:
-        return None
-    out = {p.strip().lower() for p in raw.split(",") if p.strip()}
-    return out or None
+    return parse_kind_import_selection(raw)
 
 
 @app.route("/health", methods=["GET"])
@@ -79,12 +76,12 @@ def ingest():
         return {"ok": False, "error": "expected JSON body or multipart file field 'file'"}, 400
 
     force = request.args.get("force") in ("1", "true", "yes")
-    only_kinds = _parse_kinds_arg()
+    kind_selection = _parse_kinds_arg()
 
     def _run():
         log = get_import_logger()
         try:
-            out = run_import(path, force=force, only_kinds=only_kinds)
+            out = run_import(path, force=force, kind_selection=kind_selection)
             log.info("Background import result: %s", out)
         except Exception:
             log.error("Background import crashed:\n%s", traceback.format_exc())
@@ -136,7 +133,7 @@ def preview():
         return {"ok": False, "error": "expected JSON body or multipart file field 'file'"}, 400
 
     force = request.args.get("force") in ("1", "true", "yes")
-    only_kinds = _parse_kinds_arg()
+    kind_selection = _parse_kinds_arg()
     max_changes = int(request.args.get("max_changes", "50"))
     max_diff_chars = int(request.args.get("max_diff_chars", "50000"))
 
@@ -211,7 +208,7 @@ def preview():
 
     try:
         ir.save_bot_page = save_bot_page_preview
-        out = run_import(path, force=force, dry_run=True, only_kinds=only_kinds)
+        out = run_import(path, force=force, dry_run=True, kind_selection=kind_selection)
         return {"ok": True, "import": out, "changes": changes, "count": len(changes)}
     except Exception as e:
         get_import_logger().error("Preview crashed: %s\n%s", e, traceback.format_exc())

@@ -124,6 +124,23 @@ img[src*="PQ_tex_"] {
 }
 """
 
+_LOOT_CHEST_TOC_CSS = """
+/* PQ bot: loot chest multi-variant pages — keep TOC scrollable so it does not stretch layout */
+.mw-parser-output:has(.pq-loot-chest-root) > #toc {
+	max-height: min(40vh, 22em);
+	max-width: 22em;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+/* Vector 2022 (TOC in sidebar / pinnable panel) */
+body:has(.pq-loot-chest-root) .vector-toc {
+	max-height: min(75vh, 32em);
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+"""
+
 
 def ensure_pixel_art_css(site: pywikibot.Site) -> None:
     """Ensure MediaWiki:Common.css includes pixel-art rule for PQ texture images."""
@@ -137,5 +154,21 @@ def ensure_pixel_art_css(site: pywikibot.Site) -> None:
     page.text = new_text
     page.save(
         summary="Add PQ bot pixel-art CSS (nearest-neighbor for sprites)",
+        minor=True,
+    )
+
+
+def ensure_loot_chest_toc_css(site: pywikibot.Site) -> None:
+    """Scrollable / height-limited TOC when .pq-loot-chest-root is present (import adds wrapper)."""
+    page = pywikibot.Page(site, "MediaWiki:Common.css")
+    text = page.text or ""
+    marker = "PQ bot: loot chest multi-variant pages"
+    if marker in text:
+        return
+    addition = _LOOT_CHEST_TOC_CSS.strip()
+    new_text = f"{text.rstrip()}\n\n{addition}\n" if text.strip() else f"{addition}\n"
+    page.text = new_text
+    page.save(
+        summary="Add PQ bot loot chest TOC layout (scrollable TOC)",
         minor=True,
     )

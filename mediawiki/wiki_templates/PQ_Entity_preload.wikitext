@@ -1,8 +1,9 @@
 {{PQ Entity
 |icon=
+|statistics=
+|notes=
 |found_in=
 |event_biomes=
-|statistics=
 |speeches=
 |spawns=
 |loot=

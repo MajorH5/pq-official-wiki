@@ -15,6 +15,7 @@ from pq_wiki.sprites import (
     normalize_gif_bytes_for_imagemagick,
     projectile_sprite_to_bytes,
 )
+from pq_wiki.texture_names import chest_variant_sprite_base
 from pq_wiki.wiki_assets import ensure_file_uploaded, file_wikitext
 
 
@@ -173,6 +174,30 @@ def upload_projectile_sprite(
         version,
         thumb_size=thumb_size,
         max_thumb_size=max_thumb_size,
+    )
+
+
+def upload_chest_variant_sprite(
+    site: pywikibot.Site,
+    chest_id: int,
+    textures: dict | None,
+    version: str,
+) -> str:
+    """Crop from ITEM_SPAWNS_* sheets; empty if textures missing or fetch/crop fails."""
+    if not textures:
+        return ""
+    from pq_wiki.chest_spawn_sprites import chest_spawn_png_bytes
+
+    png = chest_spawn_png_bytes(int(chest_id), textures)
+    if not png:
+        return ""
+    return upload_raw_bytes_named(
+        site,
+        png,
+        "png",
+        chest_variant_sprite_base(int(chest_id)),
+        version,
+        thumb_size=None,
     )
 
 

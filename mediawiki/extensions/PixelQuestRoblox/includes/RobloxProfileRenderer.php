@@ -1073,7 +1073,7 @@ final class RobloxProfileRenderer {
 		$v = self::statValueForKey( $stats, $canonical );
 		$abbr = self::STAT_ABBR[$canonical] ?? strtoupper( substr( $canonical, 0, 3 ) );
 		$icon = $lookup->statIconHtmlForKey( $canonical );
-		$valS = $v !== null && is_scalar( $v ) ? (string)$v : '—';
+		$valS = $v !== null && is_scalar( $v ) ? self::formatPqNumberDisplay( $v ) : '—';
 		$labelTitle = ucfirst( $canonical );
 		$label = Html::element( 'span', [
 			'class' => 'pq-roblox-stat-abbr',
@@ -1197,9 +1197,29 @@ final class RobloxProfileRenderer {
 		return null;
 	}
 
+	private static function formatPqNumberDisplay( mixed $v ): string {
+		if ( $v === null || $v === '' ) {
+			return '—';
+		}
+		if ( !is_scalar( $v ) ) {
+			return '—';
+		}
+		if ( is_numeric( $v ) ) {
+			$f = (float)$v;
+			if ( abs( $f - round( $f ) ) < 1e-9 ) {
+				return number_format( (int)round( $f ) );
+			}
+			return rtrim( rtrim( sprintf( '%.4f', $f ), '0' ), '.' );
+		}
+		return (string)$v;
+	}
+
 	private static function graveScalarCell( mixed $v ): string {
 		if ( $v === null ) {
 			return '—';
+		}
+		if ( is_scalar( $v ) && is_numeric( $v ) ) {
+			return self::formatPqNumberDisplay( $v );
 		}
 		if ( is_scalar( $v ) ) {
 			return (string)$v;
@@ -1212,7 +1232,7 @@ final class RobloxProfileRenderer {
 		$txt = '—';
 		if ( $honorDisplay !== null ) {
 			$rankId = (int)( $honorDisplay['rankId'] ?? 0 );
-			$txt = (string)(int)round( $honorDisplay['total'] ?? 0 );
+			$txt = number_format( (int)round( $honorDisplay['total'] ?? 0 ) );
 		}
 		$url = PqRobloxHonorService::honorIconUrlForRank( $lookup, $rankId );
 		if ( $url === null ) {

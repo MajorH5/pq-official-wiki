@@ -2,6 +2,26 @@
 	color: #72777d;
 }
 
+.pq-roblox-profile-unlinked-hint {
+	border: 1px solid #c8ccd1;
+	border-radius: 4px;
+	padding: 0.65rem 0.85rem;
+	margin: 0 0 0.85rem;
+	background: #f8f9fa;
+}
+
+.pq-roblox-profile-unlinked-hint p {
+	margin: 0.25em 0;
+}
+
+.pq-roblox-profile-unlinked-hint p:first-child {
+	margin-top: 0;
+}
+
+.pq-roblox-profile-unlinked-hint p:last-child {
+	margin-bottom: 0;
+}
+
 .pq-roblox-profile-tabs {
 	margin: 0.75em 0 1em;
 }

@@ -2,6 +2,7 @@
 |head=
 |icon=
 |desc=
+|notes=
 |information=
 |on_equip=
 |weapon=

@@ -5,6 +5,7 @@ import os
 import sys
 import time
 import traceback
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -67,7 +68,7 @@ from pq_wiki.renderers.save import peek_skip_build_reason
 from pq_wiki.stat_icons import build_stat_icon_wikitext_map
 from pq_wiki.status_effect_icons import build_status_effect_icon_wikitext_map
 from pq_wiki.valor_icon import build_valor_icon_wikitext
-from pq_wiki.wiki_assets import ensure_pixel_art_css
+from pq_wiki.wiki_assets import ensure_loot_chest_toc_css, ensure_pixel_art_css
 
 SUPPORTED_IMPORT_KINDS: frozenset[str] = frozenset(
     {
@@ -83,6 +84,146 @@ SUPPORTED_IMPORT_KINDS: frozenset[str] = frozenset(
         "status_effects",
     }
 )
+
+
+@dataclass(frozen=True)
+class KindImportSelection:
+    """
+    Parsed ?kinds= query (or equivalent).
+
+    - ``items:Chest`` — items with that exact TypeHierarchy string; ``items:634`` — item Id 634 only.
+    - ``locations:634`` or ``locations:Dungeon Name`` — only that location Id or exact Name (spaces OK).
+    - ``biomes:2`` or ``biomes:Beach`` — only that biome Id or exact Name (spaces OK).
+    - ``entities:497`` or ``entities:Loot Chest`` — only that entity Id or exact Name.
+    - ``skins:Name`` or ``skins:123`` — only the skin with that Name or Id.
+    """
+
+    kinds: frozenset[str]
+    items_hierarchy: str | None = None
+    locations_spec: str | None = None
+    biomes_spec: str | None = None
+    entities_spec: str | None = None
+    skins_spec: str | None = None
+
+
+def parse_kind_import_selection(raw: str) -> KindImportSelection | None:
+    """
+    Comma-separated tokens: ``items:Chest``, ``locations:Coral Cove``, ``biomes:Beach``, ``entities:497``, …
+    Unknown kind prefixes are ignored. Empty / whitespace → None (full import).
+    """
+    if not raw or not str(raw).strip():
+        return None
+    kinds_set: set[str] = set()
+    items_h: str | None = None
+    locations_s: str | None = None
+    biomes_s: str | None = None
+    entities_s: str | None = None
+    skins_s: str | None = None
+    for part in str(raw).split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if ":" in part:
+            base, _, sub = part.partition(":")
+            base_l = base.strip().lower()
+            sub = sub.strip()
+            if not base_l or not sub:
+                continue
+            if base_l not in SUPPORTED_IMPORT_KINDS:
+                continue
+            kinds_set.add(base_l)
+            if base_l == "items":
+                items_h = sub
+            elif base_l == "locations":
+                locations_s = sub
+            elif base_l == "biomes":
+                biomes_s = sub
+            elif base_l == "entities":
+                entities_s = sub
+            elif base_l == "skins":
+                skins_s = sub
+        else:
+            kinds_set.add(part.lower())
+    if not kinds_set:
+        return None
+    return KindImportSelection(
+        frozenset(kinds_set),
+        items_h,
+        locations_s,
+        biomes_s,
+        entities_s,
+        skins_s,
+    )
+
+
+def _item_has_type_hierarchy_value(item: dict[str, Any], needle: str) -> bool:
+    for h in item.get("TypeHierarchy") or []:
+        if str(h) == needle:
+            return True
+    return False
+
+
+def _item_matches_spec(item: dict[str, Any], spec: str) -> bool:
+    """``items:`` subfilter: numeric spec → Id; otherwise exact TypeHierarchy string match."""
+    spec = (spec or "").strip()
+    if not spec:
+        return True
+    if spec.isdigit():
+        try:
+            return int(item.get("Id")) == int(spec)
+        except (TypeError, ValueError):
+            return False
+    return _item_has_type_hierarchy_value(item, spec)
+
+
+def _skin_matches_spec(skin: dict[str, Any], spec: str) -> bool:
+    spec = (spec or "").strip()
+    if not spec:
+        return True
+    if spec.isdigit():
+        try:
+            return int(skin.get("Id")) == int(spec)
+        except (TypeError, ValueError):
+            return False
+    return str(skin.get("Name") or "") == spec
+
+
+def _entity_matches_spec(go: dict[str, Any], spec: str) -> bool:
+    spec = (spec or "").strip()
+    if not spec:
+        return True
+    if spec.isdigit():
+        try:
+            return int(go.get("Id")) == int(spec)
+        except (TypeError, ValueError):
+            return False
+    return str(go.get("Name") or "") == spec
+
+
+def _location_matches_spec(loc: dict[str, Any], spec: str) -> bool:
+    """``locations:`` subfilter: numeric spec → Id; otherwise exact location Name (spaces allowed)."""
+    spec = (spec or "").strip()
+    if not spec:
+        return True
+    if spec.isdigit():
+        try:
+            return int(loc.get("Id")) == int(spec)
+        except (TypeError, ValueError):
+            return False
+    return str(loc.get("Name") or "") == spec
+
+
+def _biome_matches_spec(biome: dict[str, Any], spec: str) -> bool:
+    """``biomes:`` subfilter: numeric spec → Id; otherwise exact biome Name (spaces allowed)."""
+    spec = (spec or "").strip()
+    if not spec:
+        return True
+    if spec.isdigit():
+        try:
+            return int(biome.get("Id")) == int(spec)
+        except (TypeError, ValueError):
+            return False
+    return str(biome.get("Name") or "") == spec
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -121,6 +262,54 @@ def _as_int_set(vals: Any) -> set[int]:
     return out
 
 
+def _as_str_set(vals: Any) -> set[str]:
+    """Normalized lowercase strings for case-insensitive matching (e.g. chest kind enums)."""
+    if not isinstance(vals, list):
+        return set()
+    out: set[str] = set()
+    for v in vals:
+        if v is None:
+            continue
+        s = str(v).strip()
+        if s:
+            out.add(s.lower())
+    return out
+
+
+def _chest_info_entry_kind_key(ci: dict[str, Any]) -> str | None:
+    """Datadump ChestInfo: prefer ChestKind, then Kind (string enum from game)."""
+    for key in ("ChestKind", "Kind"):
+        v = ci.get(key)
+        if v is None:
+            continue
+        s = str(v).strip()
+        if s:
+            return s.lower()
+    return None
+
+
+def apply_skip_chest_kinds_to_game_objects(
+    game_objects: list[dict[str, Any]],
+    skip_kinds: set[str],
+) -> None:
+    """Drop ChestInfo rows whose kind is in skip_kinds (entries without kind are kept)."""
+    if not skip_kinds:
+        return
+    for go in game_objects:
+        raw = go.get("ChestInfo")
+        if not isinstance(raw, list) or not raw:
+            continue
+        kept: list[dict[str, Any]] = []
+        for ci in raw:
+            if not isinstance(ci, dict):
+                continue
+            k = _chest_info_entry_kind_key(ci)
+            if k is not None and k in skip_kinds:
+                continue
+            kept.append(ci)
+        go["ChestInfo"] = kept
+
+
 def load_overrides() -> dict[str, Any]:
     defaults: dict[str, Any] = {
         "skip": {
@@ -132,6 +321,7 @@ def load_overrides() -> dict[str, Any]:
             "badges": set(),
             "achievements": set(),
             "quests": set(),
+            "chest_kinds": set(),
         },
         "unreleased": {
             "items": set(),
@@ -157,6 +347,10 @@ def load_overrides() -> dict[str, Any]:
             continue
         for kind in ("items", "locations", "entities", "biomes", "skins", "badges", "achievements", "quests"):
             defaults[section][kind] = _as_int_set(block.get(kind))
+    if isinstance(raw, dict):
+        skip_block = raw.get("skip")
+        if isinstance(skip_block, dict) and "chest_kinds" in skip_block:
+            defaults["skip"]["chest_kinds"] = _as_str_set(skip_block.get("chest_kinds"))
     if isinstance(raw, dict) and "show_hidden_achievements" in raw:
         defaults["show_hidden_achievements"] = _as_int_set(raw.get("show_hidden_achievements"))
     return defaults
@@ -203,7 +397,7 @@ def run_import(
     force: bool = False,
     *,
     dry_run: bool = False,
-    only_kinds: set[str] | None = None,
+    kind_selection: KindImportSelection | None = None,
 ) -> dict[str, Any]:
     log = get_import_logger()
     ensure_dirs()
@@ -217,19 +411,52 @@ def run_import(
     prev = read_last_version()
     effective_force = force or FORCE_OVERWRITE
     selected_kinds: set[str] | None = None
-    if only_kinds:
-        selected_kinds = {k for k in only_kinds if k in SUPPORTED_IMPORT_KINDS}
-        if not selected_kinds:
+    items_hierarchy_filter: str | None = None
+    locations_spec_filter: str | None = None
+    entities_spec_filter: str | None = None
+    skins_spec_filter: str | None = None
+    biomes_spec_filter: str | None = None
+    if kind_selection is not None:
+        bad = kind_selection.kinds - SUPPORTED_IMPORT_KINDS
+        if bad:
             raise ValueError(
-                "only_kinds provided but no valid kinds selected. "
+                f"Unsupported kind(s) in selection: {sorted(bad)}. "
                 f"Supported: {sorted(SUPPORTED_IMPORT_KINDS)}"
             )
-    scoped_run = selected_kinds is not None and selected_kinds != set(SUPPORTED_IMPORT_KINDS)
+        if not kind_selection.kinds:
+            raise ValueError("kind_selection.kinds is empty")
+        selected_kinds = set(kind_selection.kinds)
+        items_hierarchy_filter = kind_selection.items_hierarchy
+        locations_spec_filter = kind_selection.locations_spec
+        biomes_spec_filter = kind_selection.biomes_spec
+        entities_spec_filter = kind_selection.entities_spec
+        skins_spec_filter = kind_selection.skins_spec
+    scoped_run = kind_selection is not None and (
+        selected_kinds != set(SUPPORTED_IMPORT_KINDS)
+        or items_hierarchy_filter is not None
+        or locations_spec_filter is not None
+        or biomes_spec_filter is not None
+        or entities_spec_filter is not None
+        or skins_spec_filter is not None
+    )
 
     if FORCE_OVERWRITE:
         log.info("FORCE_OVERWRITE=1: overriding same-version guard and page ownership checks")
     if selected_kinds is not None:
-        log.info("Scoped import kinds: %s", sorted(selected_kinds))
+        log.info(
+            "Scoped import kinds: %s (items_hierarchy=%r locations_spec=%r biomes_spec=%r "
+            "entities_spec=%r skins_spec=%r)",
+            sorted(selected_kinds),
+            items_hierarchy_filter,
+            locations_spec_filter,
+            biomes_spec_filter,
+            entities_spec_filter,
+            skins_spec_filter,
+        )
+
+    textures_map: dict[str, object] = (
+        data["Textures"] if isinstance(data.get("Textures"), dict) else {}
+    )
 
     log.info("Starting import datadump version=%s (previous=%s)", version, prev)
     from pq_wiki.config import ROBLOX_COOKIE
@@ -254,6 +481,7 @@ def run_import(
 
     if not dry_run:
         ensure_pixel_art_css(site)
+        ensure_loot_chest_toc_css(site)
     _warn_missing_layout_templates(site, log)
 
     items = data.get("Items") or []
@@ -271,6 +499,7 @@ def run_import(
     skip_badges = overrides["skip"]["badges"]
     skip_achievements = overrides["skip"]["achievements"]
     skip_quests = overrides["skip"]["quests"]
+    skip_chest_kinds = overrides["skip"]["chest_kinds"]
     unreleased_items = overrides["unreleased"]["items"]
     unreleased_locations = overrides["unreleased"]["locations"]
     unreleased_entities = overrides["unreleased"]["entities"]
@@ -289,6 +518,7 @@ def run_import(
         for go in game_objects
         if (not go.get("IsEntity", True)) or int(go.get("Id", -1)) not in skip_entities
     ]
+    apply_skip_chest_kinds_to_game_objects(game_objects, skip_chest_kinds)
     character_skins = data.get("CharacterSkins") or []
     character_skins = [s for s in character_skins if int(s.get("Id", -1)) not in skip_skins]
 
@@ -346,7 +576,8 @@ def run_import(
         quest_categories = None
 
     log.info(
-        "Overrides loaded: skip(items=%d,locations=%d,entities=%d,skins=%d,badges=%d,achievements=%d,quests=%d) "
+        "Overrides loaded: skip(items=%d,locations=%d,entities=%d,skins=%d,badges=%d,achievements=%d,quests=%d,"
+        "chest_kinds=%d) "
         "unreleased(items=%d,locations=%d,entities=%d,skins=%d,badges=%d,achievements=%d,quests=%d) "
         "show_hidden_achievements=%d",
         len(skip_items),
@@ -356,6 +587,7 @@ def run_import(
         len(skip_badges),
         len(skip_achievements),
         len(skip_quests),
+        len(skip_chest_kinds),
         len(unreleased_items),
         len(unreleased_locations),
         len(unreleased_entities),
@@ -518,6 +750,41 @@ def run_import(
         except (TypeError, ValueError):
             continue
 
+    biome_name_to_path: dict[str, str] = {}
+    biome_name_to_biome: dict[str, dict[str, Any]] = {}
+    for b in biomes:
+        if not isinstance(b, dict):
+            continue
+        nm = b.get("Name")
+        if nm is None:
+            continue
+        ns = str(nm)
+        bid_raw = b.get("Id")
+        if bid_raw is None:
+            continue
+        try:
+            bid_i = int(bid_raw)
+        except (TypeError, ValueError):
+            continue
+        bp = biome_id_to_path.get(bid_i)
+        if bp and ns not in biome_name_to_path:
+            biome_name_to_path[ns] = bp
+        if ns not in biome_name_to_biome:
+            biome_name_to_biome[ns] = b
+
+    biome_name_to_event_entity_names: dict[str, list[str]] = {}
+    for go in entities_sorted:
+        ename = str(go.get("Name") or "").strip()
+        if not ename:
+            continue
+        for raw_b in go.get("EventBiomes") or []:
+            bn = str(raw_b).strip()
+            if not bn:
+                continue
+            biome_name_to_event_entity_names.setdefault(bn, [])
+            if ename not in biome_name_to_event_entity_names[bn]:
+                biome_name_to_event_entity_names[bn].append(ename)
+
     item_drop_sources = build_item_id_to_drop_sources(
         game_objects,
         item_name_to_id,
@@ -671,6 +938,50 @@ def run_import(
         if "quests" not in selected_kinds:
             quests_work = []
 
+    if items_hierarchy_filter and (selected_kinds is None or "items" in selected_kinds):
+        items_work = [
+            it for it in items_to_process if _item_matches_spec(it, items_hierarchy_filter)
+        ]
+        log.info(
+            "Item filter %r → %d items (ignores incremental item diff)",
+            items_hierarchy_filter,
+            len(items_work),
+        )
+    if locations_spec_filter and (selected_kinds is None or "locations" in selected_kinds):
+        locations_work = [
+            loc for loc in locations_to_process if _location_matches_spec(loc, locations_spec_filter)
+        ]
+        log.info(
+            "Location filter %r → %d locations (ignores incremental location diff)",
+            locations_spec_filter,
+            len(locations_work),
+        )
+    if biomes_spec_filter and (selected_kinds is None or "biomes" in selected_kinds):
+        biomes_work = [
+            b for b in biomes_to_process if _biome_matches_spec(b, biomes_spec_filter)
+        ]
+        log.info(
+            "Biome filter %r → %d biomes (ignores incremental biome diff)",
+            biomes_spec_filter,
+            len(biomes_work),
+        )
+    if skins_spec_filter and (selected_kinds is None or "skins" in selected_kinds):
+        skins_work = [s for s in skins_to_process if _skin_matches_spec(s, skins_spec_filter)]
+        log.info(
+            "Skin filter %r → %d skins (ignores incremental skin diff)",
+            skins_spec_filter,
+            len(skins_work),
+        )
+    if entities_spec_filter and (selected_kinds is None or "entities" in selected_kinds):
+        entities_work = [
+            go for go in entities_to_process if _entity_matches_spec(go, entities_spec_filter)
+        ]
+        log.info(
+            "Entity filter %r → %d entities (ignores incremental entity diff)",
+            entities_spec_filter,
+            len(entities_work),
+        )
+
     def _one(
         kind: str,
         title: str,
@@ -757,6 +1068,7 @@ def run_import(
                 status_effect_icons=status_effect_icons,
                 status_effect_name_to_path=status_effect_name_to_path,
                 valor_icon_wikitext=valor_icon_wikitext,
+                game_textures=textures_map,
             )
 
         def save_item(s, ttl, txt, ver, user, k):
@@ -806,6 +1118,8 @@ def run_import(
         path = biome_id_to_path[int(bio["Id"])]
 
         def build_biome(b=bio):
+            bnm = str(b.get("Name") or "")
+            extras = list(biome_name_to_event_entity_names.get(bnm, []))
             return build_biome_wikitext(
                 site,
                 b,
@@ -815,6 +1129,7 @@ def run_import(
                 entity_name_to_go=entity_name_to_go,
                 location_name_to_path=location_name_to_path,
                 difficulty_skull_icon=difficulty_skull_icon,
+                extra_found_entity_names=extras,
             )
 
         def save_biome(s, ttl, txt, ver, user, k):
@@ -846,6 +1161,8 @@ def run_import(
                 location_name_to_path=location_name_to_path,
                 location_name_to_portal=location_name_to_portal,
                 entity_name_to_locations=entity_name_to_locations,
+                biome_name_to_path=biome_name_to_path,
+                biome_name_to_biome=biome_name_to_biome,
                 drop_tier_icon_parts=drop_tier_icon_parts,
                 stat_icons=stat_icons,
                 status_effect_icons=status_effect_icons,
@@ -855,6 +1172,7 @@ def run_import(
                 skin_id_to_skin=skin_id_to_skin,
                 skin_id_to_path=skin_id_to_path,
                 skin_rarity_icon_wikitext=skin_rarity_icon_wikitext,
+                game_textures=textures_map,
             )
 
         def save_ent(s, ttl, txt, ver, user, k):
