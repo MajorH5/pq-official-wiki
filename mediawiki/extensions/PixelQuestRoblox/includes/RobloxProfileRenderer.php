@@ -374,24 +374,47 @@ final class RobloxProfileRenderer {
 			}
 		}
 		$wikiUserHtml = self::htmlWikiUserPageLink( $ctx, $target );
-		$tailParts = array_values( array_filter( [ $wikiUserHtml, $badgeHtml, $profileLink ] ) );
-		$tailBlock = implode( ' · ', $tailParts );
+		$actionParts = array_values( array_filter( [ $wikiUserHtml, $profileLink ] ) );
+		$actionsLine = implode( ' · ', $actionParts );
+
+		$nameBlock = '';
 		if ( $robloxPublic !== null && $robloxPublic['name'] !== '' ) {
 			$n = $robloxPublic['name'];
 			$dn = $robloxPublic['displayName'] ?? '';
-			$inner = Html::element( 'strong', [], $n );
+			$nameBlock = Html::element( 'strong', [], $n );
 			if ( $dn !== '' && $dn !== $n ) {
-				$inner .= ' ' . Html::element( 'span', [ 'class' => 'pq-roblox-muted' ], '(' . $dn . ')' );
+				$nameBlock .= ' ' . Html::element( 'span', [ 'class' => 'pq-roblox-muted' ], '(' . $dn . ')' );
 			}
-			$inner .= ' · ' . $tailBlock;
-			return Html::rawElement( 'p', [ 'class' => 'pq-roblox-profile-lead' ], $inner );
+		} elseif ( $target->isRegistered() ) {
+			$nameBlock = Html::element( 'strong', [], $target->getName() );
 		}
-		if ( $target->isRegistered() ) {
-			$inner = Html::element( 'strong', [], $target->getName() );
-			$inner .= ' · ' . $tailBlock;
-			return Html::rawElement( 'p', [ 'class' => 'pq-roblox-profile-lead' ], $inner );
+
+		$nameInner = $nameBlock;
+		if ( $badgeHtml !== '' ) {
+			$nameInner .= ( $nameInner !== '' ? ' ' : '' ) . $badgeHtml;
 		}
-		return Html::rawElement( 'p', [ 'class' => 'pq-roblox-profile-lead' ], $tailBlock );
+
+		$chunks = [];
+		if ( $actionsLine !== '' ) {
+			$chunks[] = Html::rawElement(
+				'p',
+				[ 'class' => 'pq-roblox-profile-lead-actions pq-roblox-muted' ],
+				$actionsLine
+			);
+		}
+		if ( $nameInner !== '' ) {
+			$chunks[] = Html::rawElement(
+				'p',
+				[ 'class' => 'pq-roblox-profile-lead-name' ],
+				$nameInner
+			);
+		}
+
+		return Html::rawElement(
+			'div',
+			[ 'class' => 'pq-roblox-profile-lead-wrap' ],
+			implode( '', $chunks )
+		);
 	}
 
 	/**
