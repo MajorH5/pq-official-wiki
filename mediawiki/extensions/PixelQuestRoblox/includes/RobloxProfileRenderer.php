@@ -803,6 +803,9 @@ final class RobloxProfileRenderer {
 		$thead = Html::rawElement( 'thead', [], Html::rawElement( 'tr', [], implode( '', $headCells ) ) );
 
 		$lang = $ctx->getLanguage();
+		$taskStatBonuses = PqRobloxPlayerDataParser::sumAccountTaskUpgradeStatBonuses(
+			PqRobloxPlayerDataParser::getCompletedTaskIds( $playerData )
+		);
 		$rows = '';
 		foreach ( $slice as $slot => $char ) {
 			if ( !is_array( $char ) ) {
@@ -814,7 +817,8 @@ final class RobloxProfileRenderer {
 				$slot,
 				$detail,
 				$invPref,
-				$lang
+				$lang,
+				$taskStatBonuses
 			);
 		}
 
@@ -857,13 +861,17 @@ final class RobloxProfileRenderer {
 	/**
 	 * @param array<string, mixed> $char
 	 */
+	/**
+	 * @param array<string, float> $taskStatBonuses Account-wide task upgrade bonuses (alive characters only).
+	 */
 	private static function characterRow(
 		PqRobloxLookupIndex $lookup,
 		array $char,
 		string $slot,
 		bool $detail,
 		bool $invPref,
-		\MediaWiki\Language\Language $lang
+		\MediaWiki\Language\Language $lang,
+		array $taskStatBonuses = []
 	): string {
 		$name = (string)( $char['characterName'] ?? $char['CharacterName'] ?? ( 'Character ' . $slot ) );
 		$skinId = (int)( $char['characterSkinId'] ?? $char['CharacterSkinId'] ?? 0 );
@@ -903,12 +911,19 @@ final class RobloxProfileRenderer {
 		];
 
 		if ( $detail ) {
+			$eqNorms = [
+				self::normalizeEquippedField( $char['equippedPrimary'] ?? $char['EquippedPrimary'] ?? null ),
+				self::normalizeEquippedField( $char['equippedSecondary'] ?? $char['EquippedSecondary'] ?? null ),
+				self::normalizeEquippedField( $char['equippedArmor'] ?? $char['EquippedArmor'] ?? null ),
+				self::normalizeEquippedField( $char['equippedAccessory'] ?? $char['EquippedAccessory'] ?? null ),
+			];
 			$cells[] = Html::rawElement( 'td', [ 'class' => 'pq-roblox-td-c pq-roblox-td-tight pq-roblox-col-eq' ],
-				self::equipmentIconsHtml( $lookup, $char ) );
+				self::equipmentIconsFromIds( $lookup, $eqNorms ) );
 			$statsRaw = $char['characterStats'] ?? $char['CharacterStats'] ?? null;
 			$stats = PqRobloxPlayerDataParser::normalizeStats( $statsRaw );
+			$boostTotals = self::sumStatBoostsForEquippedNorms( $lookup, $eqNorms );
 			$cells[] = Html::rawElement( 'td', [ 'class' => 'pq-roblox-td-tight pq-roblox-td-stats pq-roblox-col-stats' ],
-				self::statsBlockHtml( $lookup, $stats ) );
+				self::statsBlockHtml( $lookup, $stats, $boostTotals, $taskStatBonuses ) );
 		}
 
 		if ( $invPref ) {
@@ -922,19 +937,6 @@ final class RobloxProfileRenderer {
 		}
 
 		return Html::rawElement( 'tr', [], implode( '', $cells ) );
-	}
-
-	/**
-	 * @param array<string, mixed> $char
-	 */
-	private static function equipmentIconsHtml( PqRobloxLookupIndex $lookup, array $char ): string {
-		$norms = [
-			self::normalizeEquippedField( $char['equippedPrimary'] ?? $char['EquippedPrimary'] ?? null ),
-			self::normalizeEquippedField( $char['equippedSecondary'] ?? $char['EquippedSecondary'] ?? null ),
-			self::normalizeEquippedField( $char['equippedArmor'] ?? $char['EquippedArmor'] ?? null ),
-			self::normalizeEquippedField( $char['equippedAccessory'] ?? $char['EquippedAccessory'] ?? null ),
-		];
-		return self::equipmentIconsFromIds( $lookup, $norms );
 	}
 
 	/**
@@ -1046,9 +1048,102 @@ final class RobloxProfileRenderer {
 	}
 
 	/**
-	 * @param array<string, scalar|string> $stats
+	 * Map pq-datadump item StatBoosts keys (e.g. "Defense", "Health") to canonical keys used in profile stats.
 	 */
-	private static function statsBlockHtml( PqRobloxLookupIndex $lookup, array $stats ): string {
+	private static function canonicalStatKeyFromDumpKey( string $k ): ?string {
+		$norm = strtolower( str_replace( [ ' ', '_' ], '', $k ) );
+		static $map = [
+			'health' => 'health',
+			'hp' => 'health',
+			'mana' => 'mana',
+			'mp' => 'mana',
+			'defense' => 'defense',
+			'def' => 'defense',
+			'vitality' => 'vitality',
+			'vit' => 'vitality',
+			'speed' => 'speed',
+			'spd' => 'speed',
+			'wisdom' => 'wisdom',
+			'wis' => 'wisdom',
+			'attack' => 'attack',
+			'atk' => 'attack',
+			'dexterity' => 'dexterity',
+			'dex' => 'dexterity',
+		];
+		return $map[$norm] ?? null;
+	}
+
+	/**
+	 * @param array<string, mixed>|null $row Item row from datadump (getItemRow)
+	 * @return array<string, float> canonical stat => boost amount
+	 */
+	private static function statBoostsFromItemRow( ?array $row ): array {
+		if ( $row === null ) {
+			return [];
+		}
+		$sb = $row['StatBoosts'] ?? $row['statBoosts'] ?? null;
+		if ( !is_array( $sb ) ) {
+			return [];
+		}
+		$out = [];
+		foreach ( $sb as $k => $v ) {
+			if ( !is_numeric( $v ) ) {
+				continue;
+			}
+			if ( !is_string( $k ) && !is_int( $k ) ) {
+				continue;
+			}
+			$canon = self::canonicalStatKeyFromDumpKey( (string)$k );
+			if ( $canon === null ) {
+				continue;
+			}
+			$out[$canon] = ( $out[$canon] ?? 0.0 ) + (float)$v;
+		}
+		return $out;
+	}
+
+	/**
+	 * @param array<int, array{id:int, quantity:int, metadata:mixed}|null> $norms Equipped slots (primary, secondary, armor, accessory)
+	 * @return array<string, float> canonical stat => total boost from all pieces
+	 */
+	private static function sumStatBoostsForEquippedNorms( PqRobloxLookupIndex $lookup, array $norms ): array {
+		$totals = [];
+		foreach ( $norms as $norm ) {
+			$id = ( $norm !== null && (int)( $norm['id'] ?? 0 ) > 0 ) ? (int)$norm['id'] : 0;
+			if ( $id <= 0 ) {
+				continue;
+			}
+			$row = $lookup->getItemRow( $id );
+			foreach ( self::statBoostsFromItemRow( $row ) as $k => $v ) {
+				$totals[$k] = ( $totals[$k] ?? 0.0 ) + $v;
+			}
+		}
+		return $totals;
+	}
+
+	private static function formatStatBoostParen( float $delta ): string {
+		if ( abs( $delta - round( $delta ) ) < 1e-9 ) {
+			$n = (string)(int)round( $delta );
+		} else {
+			$n = self::formatPqNumberDisplay( $delta );
+		}
+		if ( $delta > 0 ) {
+			return '(+' . $n . ')';
+		}
+		return '(' . $n . ')';
+	}
+
+	/**
+	 * @param array<string, scalar|string> $stats
+	 * @param array<string, float> $boostTotals Equipment StatBoosts (shown in parens when non-zero)
+	 * @param array<string, float> $taskStatBonuses Account task upgrades (merged into base; not shown separately)
+	 */
+	private static function statsBlockHtml(
+		PqRobloxLookupIndex $lookup,
+		array $stats,
+		array $boostTotals = [],
+		array $taskStatBonuses = []
+	): string {
 		if ( $stats === [] ) {
 			return Html::element( 'span', [ 'class' => 'pq-roblox-muted' ], '—' );
 		}
@@ -1057,8 +1152,8 @@ final class RobloxProfileRenderer {
 		for ( $i = 0; $i < 4; $i++ ) {
 			$lk = self::STAT_ORDER[$i];
 			$rk = self::STAT_ORDER[$i + 4];
-			$leftCol .= self::statLineHtml( $lookup, $stats, $lk );
-			$rightCol .= self::statLineHtml( $lookup, $stats, $rk );
+			$leftCol .= self::statLineHtml( $lookup, $stats, $lk, $boostTotals, $taskStatBonuses );
+			$rightCol .= self::statLineHtml( $lookup, $stats, $rk, $boostTotals, $taskStatBonuses );
 		}
 		return Html::rawElement( 'div', [ 'class' => 'pq-roblox-stats-block' ],
 			Html::rawElement( 'div', [ 'class' => 'pq-roblox-stats-col' ], $leftCol )
@@ -1068,19 +1163,56 @@ final class RobloxProfileRenderer {
 
 	/**
 	 * @param array<string, scalar|string> $stats
+	 * @param array<string, float> $boostTotals
+	 * @param array<string, float> $taskStatBonuses
 	 */
-	private static function statLineHtml( PqRobloxLookupIndex $lookup, array $stats, string $canonical ): string {
+	private static function statLineHtml(
+		PqRobloxLookupIndex $lookup,
+		array $stats,
+		string $canonical,
+		array $boostTotals = [],
+		array $taskStatBonuses = []
+	): string {
 		$v = self::statValueForKey( $stats, $canonical );
 		$abbr = self::STAT_ABBR[$canonical] ?? strtoupper( substr( $canonical, 0, 3 ) );
 		$icon = $lookup->statIconHtmlForKey( $canonical );
-		$valS = $v !== null && is_scalar( $v ) ? self::formatPqNumberDisplay( $v ) : '—';
+		$task = (float)( $taskStatBonuses[$canonical] ?? 0.0 );
+		$delta = (float)( $boostTotals[$canonical] ?? 0.0 );
+		$hasEquipDelta = abs( $delta ) > 1e-9;
+		if ( $v !== null && is_scalar( $v ) && is_numeric( $v ) ) {
+			$baseAdjusted = (float)$v + $task;
+			if ( $hasEquipDelta ) {
+				$valS = self::formatPqNumberDisplay( $baseAdjusted + $delta );
+			} else {
+				$valS = self::formatPqNumberDisplay( $baseAdjusted );
+			}
+		} elseif ( $v !== null && is_scalar( $v ) ) {
+			$valS = self::formatPqNumberDisplay( $v );
+		} else {
+			$valS = '—';
+		}
 		$labelTitle = ucfirst( $canonical );
 		$label = Html::element( 'span', [
 			'class' => 'pq-roblox-stat-abbr',
 			'title' => $labelTitle,
 		], $abbr );
+
+		$boostHtml = '';
+		if ( $hasEquipDelta ) {
+			$cls = $delta > 0
+				? 'pq-roblox-stat-boost pq-roblox-stat-boost-pos'
+				: 'pq-roblox-stat-boost pq-roblox-stat-boost-neg';
+			$boostHtml = Html::element( 'span', [ 'class' => $cls ], self::formatStatBoostParen( $delta ) );
+		}
+
+		$valWrap = Html::rawElement(
+			'span',
+			[ 'class' => 'pq-roblox-stat-val-wrap' ],
+			Html::element( 'span', [ 'class' => 'pq-roblox-stat-val' ], $valS ) . $boostHtml
+		);
+
 		return Html::rawElement( 'div', [ 'class' => 'pq-roblox-stat-line' ],
-			$icon . $label . Html::element( 'span', [ 'class' => 'pq-roblox-stat-val' ], $valS )
+			$icon . $label . $valWrap
 		);
 	}
 
@@ -1594,8 +1726,9 @@ final class RobloxProfileRenderer {
 			self::equipmentIconsFromIds( $lookup, $eqNorms ) );
 
 		$statsRaw = PqRobloxPlayerDataParser::graveField( $rec, 11 );
+		$boostTotals = self::sumStatBoostsForEquippedNorms( $lookup, $eqNorms );
 		$statsCell = Html::rawElement( 'td', [ 'class' => 'pq-roblox-td-tight pq-roblox-td-stats' ],
-			self::graveStatsBlockHtml( $lookup, $statsRaw ) );
+			self::graveStatsBlockHtml( $lookup, $statsRaw, $boostTotals ) );
 
 		return Html::rawElement( 'tr', [],
 			Html::element( 'td', [ 'class' => 'pq-roblox-td-tight' ], $timeS )
@@ -1614,8 +1747,9 @@ final class RobloxProfileRenderer {
 
 	/**
 	 * @param mixed $statsRaw List of 8 numbers: ATK, DEF, VIT, WIS, HP, MP, DEX, SPD
+	 * @param array<string, float> $boostTotals Canonical stat key => sum of equipment StatBoosts from datadump
 	 */
-	private static function graveStatsBlockHtml( PqRobloxLookupIndex $lookup, mixed $statsRaw ): string {
+	private static function graveStatsBlockHtml( PqRobloxLookupIndex $lookup, mixed $statsRaw, array $boostTotals = [] ): string {
 		if ( !is_array( $statsRaw ) ) {
 			return Html::element( 'span', [ 'class' => 'pq-roblox-muted' ], '—' );
 		}
@@ -1637,8 +1771,8 @@ final class RobloxProfileRenderer {
 		$leftCol = '';
 		$rightCol = '';
 		for ( $i = 0; $i < 4; $i++ ) {
-			$leftCol .= self::statLineHtml( $lookup, $stats, $keys[$i] );
-			$rightCol .= self::statLineHtml( $lookup, $stats, $keys[$i + 4] );
+			$leftCol .= self::statLineHtml( $lookup, $stats, $keys[$i], $boostTotals );
+			$rightCol .= self::statLineHtml( $lookup, $stats, $keys[$i + 4], $boostTotals );
 		}
 		return Html::rawElement( 'div', [ 'class' => 'pq-roblox-stats-block pq-roblox-grave-stats' ],
 			Html::rawElement( 'div', [ 'class' => 'pq-roblox-stats-col' ], $leftCol )

@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import os
+from contextvars import ContextVar
 
 import pywikibot
 
 from pq_wiki.import_log import get_import_logger
+
+# Per-run override (e.g. CLI --edit-summary, ingest ?edit_summary=); thread-safe for ingest workers.
+_edit_summary_ctx: ContextVar[str | None] = ContextVar("pq_edit_summary", default=None)
 
 # Human adds this to wikitext to allow the next import to overwrite even when the latest
 # revision is not by the bot. Bot output does not include it (one-shot per run unless re-added).
@@ -96,6 +100,38 @@ def _verbose_save_logs() -> bool:
     )
 
 
+def push_edit_summary_override(template: str | None):
+    """
+    Per-import edit summary template. None = clear override (use env / default).
+    Returns a token for reset_edit_summary_override.
+    """
+    return _edit_summary_ctx.set(template)
+
+
+def reset_edit_summary_override(token) -> None:
+    _edit_summary_ctx.reset(token)
+
+
+def resolve_edit_summary(version: str, kind: str) -> str:
+    """
+    Wiki revision summary for bot saves.
+
+    - If a per-run override was set (push_edit_summary_override), use it.
+    - Else if PQ_EDIT_SUMMARY is set, use it.
+    - Else default: PQ bot datadump {version} ({kind})
+
+    Placeholders in the template: {version}, {kind}
+    """
+    ctx = _edit_summary_ctx.get()
+    if ctx is not None:
+        raw = ctx
+    else:
+        raw = os.environ.get("PQ_EDIT_SUMMARY", "").strip()
+    if not raw:
+        return f"PQ bot datadump {version} ({kind})"
+    return raw.replace("{version}", str(version)).replace("{kind}", str(kind))
+
+
 def save_bot_page(
     site: pywikibot.Site,
     title: str,
@@ -132,7 +168,7 @@ def save_bot_page(
                 old_rev,
             )
             return "unchanged"
-    summary = f"PQ bot datadump {version} ({kind})"
+    summary = resolve_edit_summary(version, kind)
     page.text = text
     page.save(summary=summary, minor=False)
     new_rev: int | None = None

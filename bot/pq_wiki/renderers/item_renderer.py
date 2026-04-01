@@ -175,6 +175,7 @@ def build_item_wikitext(
     _append_status_and_effect_rows(
         item, hier_set, info_rows, status_effect_icons, status_effect_name_to_path
     )
+    chest_to_soul = _chest_item_id_to_soul_item_id(item_id_to_item)
     _append_type_specific_rows(
         site,
         item,
@@ -192,6 +193,7 @@ def build_item_wikitext(
         status_effect_icons,
         status_effect_name_to_path,
         game_textures,
+        chest_item_id_to_soul_item_id=chest_to_soul,
     )
 
     triggers = _format_trigger_descriptions(item.get("TriggerDescriptions"))
@@ -608,6 +610,35 @@ def _format_item_link_with_sprite(
     return f"{icon} {label}".strip()
 
 
+def _chest_item_id_to_soul_item_id(item_id_to_item: dict[int, dict] | None) -> dict[int, int]:
+    """Map chest item id → soul item id (Soul.TypeHierarchy + ChestItemId). First soul wins if duplicated."""
+    if not item_id_to_item:
+        return {}
+    out: dict[int, int] = {}
+    for soul_it in sorted(
+        item_id_to_item.values(),
+        key=lambda x: int(x.get("Id") or 0),
+    ):
+        if not isinstance(soul_it, dict):
+            continue
+        hier_l = [str(x).lower() for x in (soul_it.get("TypeHierarchy") or [])]
+        if "soul" not in hier_l:
+            continue
+        cid = soul_it.get("ChestItemId")
+        if cid is None:
+            continue
+        try:
+            chest_iid = int(cid)
+        except (TypeError, ValueError):
+            continue
+        sid = int(soul_it.get("Id") or 0)
+        if chest_iid <= 0 or sid <= 0:
+            continue
+        if chest_iid not in out:
+            out[chest_iid] = sid
+    return out
+
+
 def _format_entity_link_with_sprite(
     site: pywikibot.Site,
     go: dict,
@@ -643,6 +674,7 @@ def _append_type_specific_rows(
     status_effect_icons: dict[str, str] | None,
     status_effect_name_to_path: dict[str, str] | None = None,
     game_textures: dict[str, object] | None = None,
+    chest_item_id_to_soul_item_id: dict[int, int] | None = None,
 ) -> None:
     if "Clover" in hier_set:
         if item.get("LuckBoost") is not None:
@@ -837,6 +869,33 @@ def _append_type_specific_rows(
                     if spr_icon:
                         cell = f'{spr_icon} <span style="vertical-align:middle">{link}</span>'
                     info_rows.append(("Spawns", cell))
+
+    if (
+        "Chest" in hier_set
+        and chest_item_id_to_soul_item_id
+        and item_id_to_path is not None
+        and item_id_to_item is not None
+    ):
+        try:
+            this_chest_item_id = int(item.get("Id") or 0)
+        except (TypeError, ValueError):
+            this_chest_item_id = 0
+        soul_iid = chest_item_id_to_soul_item_id.get(this_chest_item_id)
+        if soul_iid:
+            soul_it = item_id_to_item.get(soul_iid)
+            snm = str(soul_it.get("Name") or f"Item {soul_iid}") if soul_it else f"Item {soul_iid}"
+            soul_cell = _format_item_link_with_sprite(
+                site, soul_iid, snm, version, item_id_to_path, item_id_to_item
+            )
+            rq = soul_it.get("RequiredQuantity") if soul_it else None
+            prefix = ""
+            if rq is not None:
+                try:
+                    if float(rq) > 0:
+                        prefix = f"{fmt_num(rq)}× "
+                except (TypeError, ValueError):
+                    pass
+            info_rows.append(("Required soul", (prefix + soul_cell).strip()))
 
 
 def _stat_icon(name: str, stat_icons: dict[str, str] | None) -> str:

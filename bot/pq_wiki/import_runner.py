@@ -64,7 +64,11 @@ from pq_wiki.render_pages import (
     save_bot_page,
     skin_page_path,
 )
-from pq_wiki.renderers.save import peek_skip_build_reason
+from pq_wiki.renderers.save import (
+    peek_skip_build_reason,
+    push_edit_summary_override,
+    reset_edit_summary_override,
+)
 from pq_wiki.stat_icons import build_stat_icon_wikitext_map
 from pq_wiki.status_effect_icons import build_status_effect_icon_wikitext_map
 from pq_wiki.valor_icon import build_valor_icon_wikitext
@@ -1376,15 +1380,48 @@ def run_import(
     }
 
 
+def parse_import_cli_argv(argv: list[str]) -> tuple[list[str], str | None]:
+    """
+    Strip ``--edit-summary <text>`` from argv. Returns (remaining argv, summary or None).
+    """
+    out: list[str] = []
+    edit_summary: str | None = None
+    i = 0
+    while i < len(argv):
+        if argv[i] == "--edit-summary":
+            if i + 1 >= len(argv):
+                raise ValueError("--edit-summary requires a value")
+            edit_summary = argv[i + 1]
+            i += 2
+            continue
+        out.append(argv[i])
+        i += 1
+    return out, edit_summary
+
+
 def main(argv: list[str]) -> int:
+    try:
+        argv, edit_summary = parse_import_cli_argv(list(argv))
+    except ValueError as e:
+        print(str(e), file=sys.stderr)
+        return 2
     if len(argv) < 2:
-        print("Usage: python -m pq_wiki import <pq-datadump.json> [--force]", file=sys.stderr)
+        print(
+            "Usage: python -m pq_wiki import <pq-datadump.json> "
+            "[--force] [--edit-summary \"...\"]",
+            file=sys.stderr,
+        )
         return 2
     path = Path(argv[1])
     force = "--force" in argv
     if not path.is_file():
         print(f"Not found: {path}", file=sys.stderr)
         return 1
-    out = run_import(path, force=force)
+    tok = push_edit_summary_override(edit_summary) if edit_summary is not None else None
+    try:
+        out = run_import(path, force=force)
+    finally:
+        if tok is not None:
+            reset_edit_summary_override(tok)
     print(json.dumps(out, indent=2))
     return 0 if out.get("ok") else 1

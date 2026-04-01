@@ -12,6 +12,7 @@
 #   .\post_dump.ps1 --kinds entities:497 [dump.json]   # single entity by Id (or entities:Name for exact name)
 #   .\post_dump.ps1 --kinds skins:Tank [dump.json]   # skin named Tank (or skins:123 for id)
 #   .\post_dump.ps1 --force-overwrite [dump.json]   # same as FORCE_OVERWRITE=1 for this POST (?force_overwrite=1)
+#   .\post_dump.ps1 --edit-summary "Custom wiki edit summary" [dump.json]   # ?edit_summary= (URL-encoded)
 # Env: $env:DATADUMP_INGEST_SECRET
 #      $env:INGEST_URL (optional; default http://localhost:8081/ingest; ignored when --prod)
 
@@ -72,6 +73,15 @@ if ($ForceOverwrite) {
         $Url = "$Url&force_overwrite=1"
     } else {
         $Url = "$Url`?force_overwrite=1"
+    }
+}
+
+if ($EditSummary) {
+    $SummaryEnc = [System.Uri]::EscapeDataString($EditSummary)
+    if ($Url.Contains("?")) {
+        $Url = "$Url&edit_summary=$SummaryEnc"
+    } else {
+        $Url = "$Url`?edit_summary=$SummaryEnc"
     }
 }
 

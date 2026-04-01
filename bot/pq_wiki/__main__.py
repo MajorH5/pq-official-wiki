@@ -8,7 +8,7 @@ def main():
     argv = sys.argv[1:]
     if not argv:
         print(
-            "Usage: python -m pq_wiki import <dump.json> [--force] | "
+            "Usage: python -m pq_wiki import <dump.json> [--force] [--edit-summary \"...\"] | "
             "python -m pq_wiki import-templates | "
             "python -m pq_wiki serve",
         )

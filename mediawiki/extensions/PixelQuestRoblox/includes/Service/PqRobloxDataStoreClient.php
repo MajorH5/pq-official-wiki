@@ -51,6 +51,12 @@ final class PqRobloxDataStoreClient {
 			if ( array_key_exists( 'metadata', $blob ) ) {
 				$data['metadata'] = $blob['metadata'];
 			}
+			// Account equipped badge can live on the ProfileService envelope (sibling to Data), not inside Data.
+			foreach ( [ 'equippedPlayerBadge', 'EquippedPlayerBadge' ] as $k ) {
+				if ( !array_key_exists( $k, $data ) && array_key_exists( $k, $blob ) ) {
+					$data[$k] = $blob[$k];
+				}
+			}
 			return $data;
 		}
 		self::log( 'unwrapProfileServiceEnvelope: no Data key, using blob as player root (keys: ' . implode( ',', array_keys( $blob ) ) . ')' );

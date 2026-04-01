@@ -16,6 +16,7 @@ import difflib
 from pq_wiki.config import DATADUMP_INGEST_SECRET, INGEST_HOST, INGEST_PORT
 from pq_wiki.import_log import get_import_logger
 from pq_wiki.import_runner import parse_kind_import_selection, run_import
+from pq_wiki.renderers.save import push_edit_summary_override, reset_edit_summary_override
 
 app = Flask(__name__)
 # Large pq-datadump.json files (set via env if needed)
@@ -86,15 +87,21 @@ def ingest():
 
     force = _parse_force_overwrite_query()
     kind_selection = _parse_kinds_arg()
+    edit_summary = _parse_edit_summary_query()
 
     def _run():
         log = get_import_logger()
+        tok = (
+            push_edit_summary_override(edit_summary) if edit_summary is not None else None
+        )
         try:
             out = run_import(path, force=force, kind_selection=kind_selection)
             log.info("Background import result: %s", out)
         except Exception:
             log.error("Background import crashed:\n%s", traceback.format_exc())
         finally:
+            if tok is not None:
+                reset_edit_summary_override(tok)
             if Path(tmp_path).exists():
                 try:
                     Path(tmp_path).unlink()
@@ -143,6 +150,7 @@ def preview():
 
     force = _parse_force_overwrite_query()
     kind_selection = _parse_kinds_arg()
+    edit_summary = _parse_edit_summary_query()
     max_changes = int(request.args.get("max_changes", "50"))
     max_diff_chars = int(request.args.get("max_diff_chars", "50000"))
 
@@ -217,7 +225,14 @@ def preview():
 
     try:
         ir.save_bot_page = save_bot_page_preview
-        out = run_import(path, force=force, dry_run=True, kind_selection=kind_selection)
+        tok = (
+            push_edit_summary_override(edit_summary) if edit_summary is not None else None
+        )
+        try:
+            out = run_import(path, force=force, dry_run=True, kind_selection=kind_selection)
+        finally:
+            if tok is not None:
+                reset_edit_summary_override(tok)
         return {"ok": True, "import": out, "changes": changes, "count": len(changes)}
     except Exception as e:
         get_import_logger().error("Preview crashed: %s\n%s", e, traceback.format_exc())
