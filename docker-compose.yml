@@ -22,6 +22,8 @@ services:
       PQ_GRANT_PQADMIN_IMPORT_RIGHTS: "1"
       PQ_WIKI_IMPORT_USERNAME: ${WIKI_BOT_USER:-Pqadmin}
       WG_SERVER: ${WG_SERVER:-http://localhost:8080}
+      # Optional dev-only: set to 1 to show MediaWiki exception stack traces in the browser (never in prod).
+      # PQ_WIKI_SHOW_EXCEPTION_DETAILS: "1"
     ports:
       - "8080:80"
     depends_on:
