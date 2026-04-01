@@ -21,9 +21,17 @@ RUN apk add --no-cache git ca-certificates \
 	&& git clone --depth 1 -b REL1_43 https://github.com/wikimedia/mediawiki-extensions-TemplateStyles.git /TemplateStyles \
 	&& test -f /TemplateStyles/extension.json \
 	&& git clone --depth 1 -b REL1_43 https://github.com/wikimedia/mediawiki-extensions-MobileFrontend.git /MobileFrontend \
-	&& test -f /MobileFrontend/extension.json
+	&& test -f /MobileFrontend/extension.json \
+	&& git clone --depth 1 https://github.com/SkizNet/mediawiki-GTag.git /GTag \
+	&& test -f /GTag/extension.json \
+	&& git clone --depth 1 -b REL1_43 https://github.com/wikimedia/mediawiki-extensions-Analytics.git /Analytics \
+	&& test -f /Analytics/extension.json
+
+FROM composer:2 AS composer-bin
 
 FROM mediawiki:lts
+
+COPY --from=composer-bin /usr/bin/composer /usr/bin/composer
 
 COPY --from=ext-src --chown=www-data:www-data /EmbedVideo /var/www/html/extensions/EmbedVideo
 COPY --from=ext-src --chown=www-data:www-data /Lingo /var/www/html/extensions/Lingo
@@ -32,6 +40,13 @@ COPY --from=ext-src --chown=www-data:www-data /CheckUser /var/www/html/extension
 COPY --from=ext-src --chown=www-data:www-data /Lockdown /var/www/html/extensions/Lockdown
 COPY --from=ext-src --chown=www-data:www-data /TemplateStyles /var/www/html/extensions/TemplateStyles
 COPY --from=ext-src --chown=www-data:www-data /MobileFrontend /var/www/html/extensions/MobileFrontend
+COPY --from=ext-src --chown=www-data:www-data /GTag /var/www/html/extensions/GTag
+COPY --from=ext-src --chown=www-data:www-data /Analytics /var/www/html/extensions/Analytics
+
+# PHP dependencies for Extension:Analytics (GA4 backfill script, etc.)
+RUN cd /var/www/html/extensions/Analytics \
+	&& composer install --no-dev --no-interaction \
+	&& chown -R www-data:www-data /var/www/html/extensions/Analytics/vendor
 
 # Fail the build if copies are missing (catches bad cache / broken COPY)
 RUN test -f /var/www/html/extensions/EmbedVideo/extension.json \
@@ -40,7 +55,9 @@ RUN test -f /var/www/html/extensions/EmbedVideo/extension.json \
 	&& test -f /var/www/html/extensions/CheckUser/extension.json \
 	&& test -f /var/www/html/extensions/Lockdown/extension.json \
 	&& test -f /var/www/html/extensions/TemplateStyles/extension.json \
-	&& test -f /var/www/html/extensions/MobileFrontend/extension.json
+	&& test -f /var/www/html/extensions/MobileFrontend/extension.json \
+	&& test -f /var/www/html/extensions/GTag/extension.json \
+	&& test -f /var/www/html/extensions/Analytics/extension.json
 
 
 # Pixel Quest: Roblox linking + profiles (from this repo)

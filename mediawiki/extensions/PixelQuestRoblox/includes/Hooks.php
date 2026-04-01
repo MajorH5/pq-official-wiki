@@ -7,6 +7,7 @@ use MediaWiki\Html\Html;
 use MediaWiki\Installer\DatabaseUpdater;
 use MediaWiki\MediaWikiServices;
 use MediaWiki\Output\OutputPage;
+use MediaWiki\Rest\HttpException;
 use MediaWiki\Title\Title;
 use MediaWiki\User\User;
 use PixelQuestRoblox\Service\PqRobloxDataStoreClient;
@@ -222,6 +223,8 @@ final class Hooks {
 	 * @param mixed $skin Skin instance (Vector legacy does not satisfy MediaWiki\Skin\Skin in all MW versions).
 	 */
 	public static function onBeforePageDisplay( OutputPage $out, $skin ): void {
+		self::maybeAddCookieConsentModule( $out );
+
 		$req = $out->getRequest();
 		if ( strtolower( (string)$req->getVal( 'action', 'view' ) ) !== 'view' ) {
 			return;
@@ -239,6 +242,43 @@ final class Hooks {
 			return;
 		}
 		$out->addModuleStyles( 'ext.pqroblox.badge' );
+	}
+
+	/**
+	 * Cookie consent bar when GA is configured with PQ_COOKIE_CONSENT_ENABLED (default on).
+	 * Until the user accepts, LocalSettings leaves $wgGTagAnalyticsId empty so GTag does not load.
+	 */
+	/**
+	 * Extension:Analytics registers public REST routes with no permission check.
+	 * Restrict them to the same groups as Special:Analytics (Lockdown).
+	 *
+	 * @param mixed $module
+	 * @param mixed $handler
+	 * @param mixed $request
+	 * @param \MediaWiki\Rest\HttpException|null &$error
+	 */
+	public static function onRestCheckCanExecute( $module, $handler, string $path, $request, &$error ): bool {
+		if ( !is_object( $handler ) || get_class( $handler ) !== 'AnalyticsAPI' ) {
+			return true;
+		}
+		$user = RequestContext::getMain()->getUser();
+		if ( $user->isRegistered() && ( $user->inGroup( 'sysop' ) || $user->inGroup( 'bureaucrat' ) ) ) {
+			return true;
+		}
+		$error = new HttpException( 'Access denied', 403 );
+		return false;
+	}
+
+	private static function maybeAddCookieConsentModule( OutputPage $out ): void {
+		$gtagId = trim( (string)( $_ENV['PQ_GTAG_MEASUREMENT_ID'] ?? getenv( 'PQ_GTAG_MEASUREMENT_ID' ) ?: '' ) );
+		$consentEnabled = ( $_ENV['PQ_COOKIE_CONSENT_ENABLED'] ?? getenv( 'PQ_COOKIE_CONSENT_ENABLED' ) ?: '1' ) !== '0';
+		if ( $gtagId === '' || !$consentEnabled ) {
+			return;
+		}
+		if ( isset( $_COOKIE['pq_cookie_consent'] ) ) {
+			return;
+		}
+		$out->addModules( [ 'ext.pqroblox.cookieconsent' ] );
 	}
 
 	/**

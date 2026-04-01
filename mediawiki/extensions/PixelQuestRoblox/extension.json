@@ -18,6 +18,7 @@
 		"UserGetDefaultOptions": "PixelQuestRoblox\\Hooks::onUserGetDefaultOptions",
 		"OutputPageBeforeHTML": "PixelQuestRoblox\\Hooks::onOutputPageBeforeHTML",
 		"BeforePageDisplay": "PixelQuestRoblox\\Hooks::onBeforePageDisplay",
+		"RestCheckCanExecute": "PixelQuestRoblox\\Hooks::onRestCheckCanExecute",
 		"ApiOpenSearchSuggest": "PixelQuestRoblox\\Hooks::onApiOpenSearchSuggest",
 		"SpecialSearchResultsPrepend": "PixelQuestRoblox\\Hooks::onSpecialSearchResultsPrepend"
 	},
@@ -42,6 +43,19 @@
 		},
 		"ext.pqroblox.badge": {
 			"styles": "resources/ext.pqroblox.badge.css"
+		},
+		"ext.pqroblox.cookieconsent": {
+			"styles": "resources/ext.pqroblox.cookieconsent.css",
+			"scripts": "resources/ext.pqroblox.cookieconsent.js",
+			"dependencies": [
+				"mediawiki.base"
+			],
+			"messages": [
+				"pqroblox-cookieconsent-text",
+				"pqroblox-cookieconsent-accept",
+				"pqroblox-cookieconsent-reject",
+				"pqroblox-cookieconsent-policy"
+			]
 		}
 	},
 	"ResourceFileModulePaths": {

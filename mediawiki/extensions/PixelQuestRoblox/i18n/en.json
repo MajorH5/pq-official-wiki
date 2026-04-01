@@ -136,5 +136,9 @@
 	"pqroblox-profiles-col-roblox": "Roblox user id",
 	"pqroblox-wiki-goto-profile": "View your [[Special:PQProfile|Pixel Quest profile]].",
 	"pqroblox-userpage-preview-title": "Pixel Quest profile preview",
-	"pqroblox-userpage-preview-open": "Open full Pixel Quest profile page"
+	"pqroblox-userpage-preview-open": "Open full Pixel Quest profile page",
+	"pqroblox-cookieconsent-text": "This site uses cookies to measure traffic with Google Analytics. You can accept analytics cookies or reject non-essential cookies.",
+	"pqroblox-cookieconsent-accept": "Accept",
+	"pqroblox-cookieconsent-reject": "Reject",
+	"pqroblox-cookieconsent-policy": ""
 }
