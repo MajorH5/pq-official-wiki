@@ -1,6 +1,7 @@
 """Quest datadump helpers: categories, event types, display names."""
 from __future__ import annotations
 
+import re
 from typing import Any
 
 # Align with game QuestEventType enum (numbers in dump).
@@ -19,6 +20,32 @@ EVENT_GAUNTLET_COMPLETED = 9
 def enum_key_to_display(key: str) -> str:
     """FLOWER_WOODLAND -> Flower Woodland"""
     return key.replace("_", " ").strip().title()
+
+
+def sanitize_quest_name(name: str, q: dict[str, Any]) -> str:
+    """
+    Replace ``{dispatchKey}`` and apply the same random-dungeon title rules as the wiki body.
+
+    Must run before ``_clean_title`` / page paths: MediaWiki titles strip ``{}``, which would
+    turn ``{dispatchKey}`` into the bogus word ``dispatchKey``.
+    """
+    rk = int(q.get("RandomKeyAmount") or 1)
+    name = re.sub(r"\{dispatchKey\}", "X", name, flags=re.IGNORECASE)
+    # If braces were stripped upstream or data used a bare token.
+    name = re.sub(r"\bdispatchKey\b", "X", name, flags=re.IGNORECASE)
+    if q.get("RandomizesDispatchKeys"):
+        m = re.search(r"\b(\d+)\b", name)
+        n = m.group(1) if m else str(rk)
+        if re.search(r"clear.*dungeon", name, re.I) or "dungeon" in name.lower():
+            name = f"Clear {n} random dungeons (rotating pool)"
+    return name
+
+
+def sanitize_quest_description(desc: str) -> str:
+    """Replace ``{dispatchKey}`` in descriptions (same token as names)."""
+    desc = re.sub(r"\{dispatchKey\}", "a random target", desc, flags=re.IGNORECASE)
+    desc = re.sub(r"\bdispatchKey\b", "a random target", desc, flags=re.IGNORECASE)
+    return desc
 
 
 def quest_category_display(

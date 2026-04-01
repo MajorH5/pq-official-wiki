@@ -100,6 +100,7 @@ class KindImportSelection:
     - ``biomes:2`` or ``biomes:Beach`` — only that biome Id or exact Name (spaces OK).
     - ``entities:497`` or ``entities:Loot Chest`` — only that entity Id or exact Name.
     - ``skins:Name`` or ``skins:123`` — only the skin with that Name or Id.
+    - ``quests:139`` or ``quests:Quest Name`` — only that quest Id or exact Name.
     """
 
     kinds: frozenset[str]
@@ -108,6 +109,7 @@ class KindImportSelection:
     biomes_spec: str | None = None
     entities_spec: str | None = None
     skins_spec: str | None = None
+    quests_spec: str | None = None
 
 
 def parse_kind_import_selection(raw: str) -> KindImportSelection | None:
@@ -123,6 +125,7 @@ def parse_kind_import_selection(raw: str) -> KindImportSelection | None:
     biomes_s: str | None = None
     entities_s: str | None = None
     skins_s: str | None = None
+    quests_s: str | None = None
     for part in str(raw).split(","):
         part = part.strip()
         if not part:
@@ -130,6 +133,8 @@ def parse_kind_import_selection(raw: str) -> KindImportSelection | None:
         if ":" in part:
             base, _, sub = part.partition(":")
             base_l = base.strip().lower()
+            if base_l == "quest":
+                base_l = "quests"
             sub = sub.strip()
             if not base_l or not sub:
                 continue
@@ -146,8 +151,13 @@ def parse_kind_import_selection(raw: str) -> KindImportSelection | None:
                 entities_s = sub
             elif base_l == "skins":
                 skins_s = sub
+            elif base_l == "quests":
+                quests_s = sub
         else:
-            kinds_set.add(part.lower())
+            p = part.lower()
+            if p == "quest":
+                p = "quests"
+            kinds_set.add(p)
     if not kinds_set:
         return None
     return KindImportSelection(
@@ -157,6 +167,7 @@ def parse_kind_import_selection(raw: str) -> KindImportSelection | None:
         biomes_s,
         entities_s,
         skins_s,
+        quests_s,
     )
 
 
@@ -228,6 +239,19 @@ def _biome_matches_spec(biome: dict[str, Any], spec: str) -> bool:
         except (TypeError, ValueError):
             return False
     return str(biome.get("Name") or "") == spec
+
+
+def _quest_matches_spec(quest: dict[str, Any], spec: str) -> bool:
+    """``quests:`` subfilter: numeric spec → Id; otherwise exact quest Name from datadump."""
+    spec = (spec or "").strip()
+    if not spec:
+        return True
+    if spec.isdigit():
+        try:
+            return int(quest.get("Id")) == int(spec)
+        except (TypeError, ValueError):
+            return False
+    return str(quest.get("Name") or "") == spec
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -420,6 +444,7 @@ def run_import(
     entities_spec_filter: str | None = None
     skins_spec_filter: str | None = None
     biomes_spec_filter: str | None = None
+    quests_spec_filter: str | None = None
     if kind_selection is not None:
         bad = kind_selection.kinds - SUPPORTED_IMPORT_KINDS
         if bad:
@@ -435,6 +460,7 @@ def run_import(
         biomes_spec_filter = kind_selection.biomes_spec
         entities_spec_filter = kind_selection.entities_spec
         skins_spec_filter = kind_selection.skins_spec
+        quests_spec_filter = kind_selection.quests_spec
     scoped_run = kind_selection is not None and (
         selected_kinds != set(SUPPORTED_IMPORT_KINDS)
         or items_hierarchy_filter is not None
@@ -442,6 +468,7 @@ def run_import(
         or biomes_spec_filter is not None
         or entities_spec_filter is not None
         or skins_spec_filter is not None
+        or quests_spec_filter is not None
     )
 
     if effective_force:
@@ -987,6 +1014,15 @@ def run_import(
             "Entity filter %r → %d entities (ignores incremental entity diff)",
             entities_spec_filter,
             len(entities_work),
+        )
+    if quests_spec_filter and (selected_kinds is None or "quests" in selected_kinds):
+        quests_work = [
+            q for q in quests_to_process if _quest_matches_spec(q, quests_spec_filter)
+        ]
+        log.info(
+            "Quest filter %r → %d quests (ignores incremental quest diff)",
+            quests_spec_filter,
+            len(quests_work),
         )
 
     def _one(

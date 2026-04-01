@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from typing import Any
 
 import pywikibot
@@ -15,6 +14,8 @@ from pq_wiki.quest_helpers import (
     normalize_icon_to_sprite,
     quest_category_display,
     reward_is_choice_stat_quest,
+    sanitize_quest_description,
+    sanitize_quest_name,
 )
 from pq_wiki.renderers.achievement_renderer import _link_file_wikitext_to_page
 from pq_wiki.reward_wikitext import render_rewards_wikitable
@@ -63,13 +64,9 @@ def _go_sprite_for_upload(go: dict[str, Any]) -> dict[str, Any] | None:
 def _sanitize_random_quest(name: str, desc: str, q: dict[str, Any]) -> tuple[str, str]:
     """Replace {dispatchKey} placeholders; generic title when randomized."""
     rk = int(q.get("RandomKeyAmount") or 1)
-    name = re.sub(r"\{dispatchKey\}", "X", name, flags=re.IGNORECASE)
-    desc = re.sub(r"\{dispatchKey\}", "a random target", desc, flags=re.IGNORECASE)
+    name = sanitize_quest_name(name, q)
+    desc = sanitize_quest_description(desc)
     if q.get("RandomizesDispatchKeys"):
-        m = re.search(r"\b(\d+)\b", name)
-        n = m.group(1) if m else str(rk)
-        if re.search(r"clear.*dungeon", name, re.I) or "dungeon" in name.lower():
-            name = f"Clear {n} random dungeons (rotating pool)"
         desc = (desc or "").strip()
         if len(desc) < 10:
             desc = (

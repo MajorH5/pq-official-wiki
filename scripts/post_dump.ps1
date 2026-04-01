@@ -2,6 +2,9 @@
 # Usage:
 #   .\post_dump.ps1 [dump.json]
 #   .\post_dump.ps1 --prod [dump.json]
+#   .\post_dump.ps1 --kinds quests [dump.json]   # quests only (full quest list)
+#   .\post_dump.ps1 --kinds quests:139 [dump.json]   # single quest by Id
+#   .\post_dump.ps1 --kinds "quests:Clear 3 {dispatchKey} Dungeons" [dump.json]   # exact Name from pq-datadump.json (quote if spaces)
 #   .\post_dump.ps1 --kinds skins,quests [dump.json]
 #   .\post_dump.ps1 --kinds items:Chest [dump.json]   # TypeHierarchy exact string "Chest"
 #   .\post_dump.ps1 --kinds items:634 [dump.json]    # single item by Id

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 
+from pq_wiki.quest_helpers import sanitize_quest_name
+
 
 def _clean_title(name: str | None, fallback: str) -> str:
     """MediaWiki-friendly human title (spaces, not slug hyphens)."""
@@ -117,9 +119,15 @@ def achievement_page_path(ach: dict, used_paths: set[str] | None = None) -> str:
 def quest_page_path(quest: dict, used_paths: set[str] | None = None) -> str:
     qid = int(quest["Id"])
     fb = f"Quest {qid}"
+    raw = quest.get("Name")
+    name_for_title = (
+        sanitize_quest_name(str(raw), quest)
+        if raw is not None and str(raw).strip() != ""
+        else raw
+    )
     if used_paths is None:
-        return _clean_title(quest.get("Name"), fb)
-    return _claim_unique_title(quest.get("Name"), fb, qid, used_paths)
+        return _clean_title(name_for_title, fb)
+    return _claim_unique_title(name_for_title, fb, qid, used_paths)
 
 
 # Bot emits one article; sections use == headings ==. Links: [[Status effects#Fragment|Name]].
