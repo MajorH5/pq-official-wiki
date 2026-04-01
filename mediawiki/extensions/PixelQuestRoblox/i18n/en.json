@@ -2,6 +2,9 @@
 	"@metadata": {
 		"authors": [ "Pixel Quest Wiki" ]
 	},
+	"group-pqmoderator": "PQ moderators",
+	"grouppage-pqmoderator": "{{ns:project}}:PQ moderators",
+	"right-pq-profile-moderate": "View all Pixel Quest profile data on others' profiles regardless of their privacy settings",
 	"linkrobloxaccount": "Link account",
 	"special-linkrobloxaccount": "Link account",
 	"pqroblox-form-legend": "Enter your wiki code",

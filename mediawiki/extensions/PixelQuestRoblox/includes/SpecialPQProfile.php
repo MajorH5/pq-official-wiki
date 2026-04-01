@@ -165,7 +165,11 @@ final class SpecialPQProfile extends SpecialPage {
 
 		$isProfileOwner = self::computeProfileOwner( $viewer, $target, $viewerRobloxId, $robloxId );
 		$forceRefresh = $req->getBool( 'pqroblox_refresh' )
-			&& ( $isProfileOwner || $viewer->isAllowed( 'userrights' ) );
+			&& (
+				$isProfileOwner
+				|| $viewer->isAllowed( 'userrights' )
+				|| $viewer->isAllowed( 'pq-profile-moderate' )
+			);
 
 		$playerData = PqRobloxDataStoreClient::getPlayerDataForRobloxUser( $robloxId, $forceRefresh );
 		if ( $playerData === null ) {
@@ -262,6 +266,21 @@ final class SpecialPQProfile extends SpecialPage {
 		?int $viewerRobloxId,
 		int $targetRobloxId
 	): array {
+		if ( $viewer->isAllowed( 'pq-profile-moderate' ) ) {
+			return [
+				'valor' => true,
+				'last_seen' => true,
+				'characters' => true,
+				'characters_detail' => true,
+				'characters_inventory' => true,
+				'graveyard' => true,
+				'skins' => true,
+				'badges' => true,
+				'honor' => true,
+				'vault' => true,
+				'account_stats' => true,
+			];
+		}
 		if ( !$target->isRegistered() ) {
 			if ( $isOwner ) {
 				return [

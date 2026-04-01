@@ -47,5 +47,13 @@
 	"ResourceFileModulePaths": {
 		"localBasePath": "",
 		"remoteExtPath": "PixelQuestRoblox"
+	},
+	"AvailableRights": [
+		"pq-profile-moderate"
+	],
+	"GroupPermissions": {
+		"pqmoderator": {
+			"pq-profile-moderate": true
+		}
 	}
 }
