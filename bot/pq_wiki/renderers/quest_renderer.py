@@ -39,6 +39,8 @@ _EVENT_NAMES: dict[int, str] = {
 
 
 def _go_sprite_for_upload(go: dict[str, Any]) -> dict[str, Any] | None:
+    from pq_wiki.sprites import normalize_image_rect_offset_size
+
     sp = go.get("Sprite")
     if not isinstance(sp, dict):
         return None
@@ -50,6 +52,11 @@ def _go_sprite_for_upload(go: dict[str, Any]) -> dict[str, Any] | None:
         out["ImageRectOffset"] = out["imageRectOffset"]
     if "ImageRectSize" not in out and "imageRectSize" in out:
         out["ImageRectSize"] = out["imageRectSize"]
+    ro = out.get("ImageRectOffset") or out.get("imageRectOffset") or {}
+    rs = out.get("ImageRectSize") or out.get("imageRectSize") or {}
+    (ox, oy), (w, h) = normalize_image_rect_offset_size(ro, rs)
+    out["ImageRectOffset"] = {"X": ox, "Y": oy}
+    out["ImageRectSize"] = {"X": w, "Y": h}
     return out
 
 

@@ -23,6 +23,25 @@ def normalize_xy(obj: Optional[dict]) -> tuple[int, int]:
     return int(_g(obj, "X", "x", default=0)), int(_g(obj, "Y", "y", default=0))
 
 
+def normalize_image_rect_offset_size(
+    off: Optional[dict], sz: Optional[dict]
+) -> tuple[tuple[int, int], tuple[int, int]]:
+    """
+    Roblox may flip UVs with negative ImageRectSize. Adjust offset on that axis by the
+    signed size, then use absolute dimensions (same rect in texture space).
+    """
+    ox, oy = normalize_xy(off)
+    w = int(_g(sz, "X", "x", default=1))
+    h = int(_g(sz, "Y", "y", default=1))
+    if w < 0:
+        ox += w
+        w = abs(w)
+    if h < 0:
+        oy += h
+        h = abs(h)
+    return (ox, oy), (w, h)
+
+
 def get_texture_url(sprite: Optional[dict]) -> Optional[str]:
     if not sprite:
         return None
@@ -43,11 +62,14 @@ def projectile_visual_signature_payload(proj_sprite: dict) -> dict[str, Any]:
             "fps_scale": 0.5,
             "animation": anim,
         }
+    ro = proj_sprite.get("imageRectOffset") or proj_sprite.get("ImageRectOffset") or {}
+    rs = proj_sprite.get("imageRectSize") or proj_sprite.get("ImageRectSize") or {}
+    (ox, oy), (rw, rh) = normalize_image_rect_offset_size(ro, rs)
     return {
         "asset_id": aid,
         "static": {
-            "imageRectOffset": proj_sprite.get("imageRectOffset") or proj_sprite.get("ImageRectOffset"),
-            "imageRectSize": proj_sprite.get("imageRectSize") or proj_sprite.get("ImageRectSize"),
+            "imageRectOffset": {"X": ox, "Y": oy},
+            "imageRectSize": {"X": rw, "Y": rh},
         },
     }
 
@@ -224,9 +246,7 @@ def animation_frames_rgba(animation: dict, sheet: Image.Image) -> list[Image.Ima
     """Crop each cell from a sheet using Roblox-style Size / ImageRectSize / Base / Frames / FrameSizes."""
     size = animation.get("Size") or animation.get("ImageRectSize") or animation.get("imageRectSize") or {}
     base = animation.get("Base") or {}
-    fw = int(_g(size, "X", "x", default=1))
-    fh = int(_g(size, "Y", "y", default=1))
-    bx, by = normalize_xy(base)
+    (bx, by), (fw, fh) = normalize_image_rect_offset_size(base, size)
     frames_spec = animation.get("Frames") or []
     frame_sizes = animation.get("FrameSizes") or animation.get("frameSizes")
     frames: list[Image.Image] = []
@@ -290,10 +310,8 @@ def render_animation_to_gif_bytes(
 def render_tier_icon_strip(sprite: dict, sheet: Image.Image) -> bytes:
     """TierIcon-style: Frames + ImageRectSize, optional Base."""
     size = sprite.get("ImageRectSize") or sprite.get("imageRectSize") or {}
-    fw = int(_g(size, "X", "x", default=1))
-    fh = int(_g(size, "Y", "y", default=1))
     base = sprite.get("Base") or {"X": 0, "Y": 0}
-    bx, by = normalize_xy(base)
+    (bx, by), (fw, fh) = normalize_image_rect_offset_size(base, size)
     frames_spec = sprite.get("Frames") or []
     imgs: list[Image.Image] = []
     for cell in frames_spec:
@@ -315,9 +333,7 @@ def render_tier_icon_strip(sprite: dict, sheet: Image.Image) -> bytes:
 def render_static_sprite(sprite: dict, sheet: Image.Image) -> bytes:
     off = sprite.get("imageRectOffset") or sprite.get("ImageRectOffset") or {}
     sz = sprite.get("imageRectSize") or sprite.get("ImageRectSize") or {}
-    ox, oy = normalize_xy(off)
-    w = int(_g(sz, "X", "x", default=1))
-    h = int(_g(sz, "Y", "y", default=1))
+    (ox, oy), (w, h) = normalize_image_rect_offset_size(off, sz)
     im = _crop_sheet(sheet, ox, oy, w, h).convert("RGBA")
     buf = io.BytesIO()
     im.save(buf, format="PNG")

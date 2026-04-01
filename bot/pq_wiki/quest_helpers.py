@@ -80,14 +80,13 @@ def reward_is_choice_stat_quest(rewards: list[dict[str, Any]]) -> bool:
 
 def icon_dedupe_key(icon: dict[str, Any]) -> str:
     """Stable key for quest Icons[] to skip duplicate crops."""
+    from pq_wiki.sprites import normalize_image_rect_offset_size
+
     img = str(icon.get("image") or icon.get("Texture") or "")
     ro = icon.get("imageRectOffset") or icon.get("ImageRectOffset") or {}
     rs = icon.get("imageRectSize") or icon.get("ImageRectSize") or {}
     try:
-        ox = int(ro.get("X", ro.get("x", 0)))
-        oy = int(ro.get("Y", ro.get("y", 0)))
-        sx = int(rs.get("X", rs.get("x", 0)))
-        sy = int(rs.get("Y", rs.get("y", 0)))
+        (ox, oy), (sx, sy) = normalize_image_rect_offset_size(ro, rs)
     except (TypeError, ValueError):
         ox = oy = sx = sy = 0
     return f"{img}|{ox},{oy}|{sx},{sy}"
@@ -95,16 +94,17 @@ def icon_dedupe_key(icon: dict[str, Any]) -> str:
 
 def normalize_icon_to_sprite(icon: dict[str, Any]) -> dict[str, Any]:
     """Map quest Icon dict (image, imageRect*) to sprite dict for upload_sprite_if_possible."""
+    from pq_wiki.sprites import normalize_image_rect_offset_size
+
     out: dict[str, Any] = {}
     tex = icon.get("image") or icon.get("Texture")
     if tex:
         out["Texture"] = tex
-    ro = icon.get("imageRectOffset") or icon.get("ImageRectOffset")
-    rs = icon.get("imageRectSize") or icon.get("ImageRectSize")
-    if isinstance(ro, dict):
-        out["ImageRectOffset"] = {"X": ro.get("X", ro.get("x", 0)), "Y": ro.get("Y", ro.get("y", 0))}
-    if isinstance(rs, dict):
-        out["ImageRectSize"] = {"X": rs.get("X", rs.get("x", 0)), "Y": rs.get("Y", rs.get("y", 0))}
+    ro = icon.get("imageRectOffset") or icon.get("ImageRectOffset") or {}
+    rs = icon.get("imageRectSize") or icon.get("ImageRectSize") or {}
+    (ox, oy), (sx, sy) = normalize_image_rect_offset_size(ro, rs)
+    out["ImageRectOffset"] = {"X": ox, "Y": oy}
+    out["ImageRectSize"] = {"X": sx, "Y": sy}
     return out
 
 
