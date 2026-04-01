@@ -11,6 +11,7 @@
 #   .\post_dump.ps1 --kinds "biomes:Cherry Blossom" [dump.json]   # exact biome Name (quote if spaces)
 #   .\post_dump.ps1 --kinds entities:497 [dump.json]   # single entity by Id (or entities:Name for exact name)
 #   .\post_dump.ps1 --kinds skins:Tank [dump.json]   # skin named Tank (or skins:123 for id)
+#   .\post_dump.ps1 --force-overwrite [dump.json]   # same as FORCE_OVERWRITE=1 for this POST (?force_overwrite=1)
 # Env: $env:DATADUMP_INGEST_SECRET
 #      $env:INGEST_URL (optional; default http://localhost:8081/ingest; ignored when --prod)
 
@@ -21,6 +22,7 @@ Set-Location (Join-Path $ScriptDir "..")
 
 $Prod = $false
 $Kinds = $null
+$ForceOverwrite = $false
 $Rest = [System.Collections.ArrayList]@()
 for ($i = 0; $i -lt $args.Count; $i++) {
     $a = $args[$i]
@@ -29,6 +31,8 @@ for ($i = 0; $i -lt $args.Count; $i++) {
     } elseif ($a -eq "--kinds" -and ($i + 1) -lt $args.Count) {
         $i++
         $Kinds = $args[$i]
+    } elseif ($a -eq "--force-overwrite" -or $a -eq "--force") {
+        $ForceOverwrite = $true
     } else {
         [void]$Rest.Add($a)
     }
@@ -60,6 +64,14 @@ if ($Kinds) {
         $Url = "$Url&kinds=$KindsEnc"
     } else {
         $Url = "$Url`?kinds=$KindsEnc"
+    }
+}
+
+if ($ForceOverwrite) {
+    if ($Url.Contains("?")) {
+        $Url = "$Url&force_overwrite=1"
+    } else {
+        $Url = "$Url`?force_overwrite=1"
     }
 }
 

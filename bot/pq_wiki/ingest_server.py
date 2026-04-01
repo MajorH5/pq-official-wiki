@@ -41,6 +41,15 @@ def _parse_kinds_arg():
     return parse_kind_import_selection(raw)
 
 
+def _parse_force_overwrite_query() -> bool:
+    """Truth query params override env FORCE_OVERWRITE for this run (see run_import force=)."""
+    for name in ("force_overwrite", "FORCE_OVERWRITE", "force"):
+        v = request.args.get(name)
+        if v is not None and str(v).strip().lower() in ("1", "true", "yes"):
+            return True
+    return False
+
+
 @app.route("/health", methods=["GET"])
 def health():
     return {"status": "ok"}
@@ -75,7 +84,7 @@ def ingest():
     else:
         return {"ok": False, "error": "expected JSON body or multipart file field 'file'"}, 400
 
-    force = request.args.get("force") in ("1", "true", "yes")
+    force = _parse_force_overwrite_query()
     kind_selection = _parse_kinds_arg()
 
     def _run():
@@ -132,7 +141,7 @@ def preview():
     else:
         return {"ok": False, "error": "expected JSON body or multipart file field 'file'"}, 400
 
-    force = request.args.get("force") in ("1", "true", "yes")
+    force = _parse_force_overwrite_query()
     kind_selection = _parse_kinds_arg()
     max_changes = int(request.args.get("max_changes", "50"))
     max_diff_chars = int(request.args.get("max_diff_chars", "50000"))

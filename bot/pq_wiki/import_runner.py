@@ -440,8 +440,11 @@ def run_import(
         or skins_spec_filter is not None
     )
 
-    if FORCE_OVERWRITE:
-        log.info("FORCE_OVERWRITE=1: overriding same-version guard and page ownership checks")
+    if effective_force:
+        log.info(
+            "Force overwrite enabled (--force, ingest ?force_overwrite=1, or FORCE_OVERWRITE=1): "
+            "overriding same-version guard and page ownership checks",
+        )
     if selected_kinds is not None:
         log.info(
             "Scoped import kinds: %s (items_hierarchy=%r locations_spec=%r biomes_spec=%r "
@@ -993,7 +996,7 @@ def run_import(
         t0 = time.perf_counter()
         prefix = f"[{progress}] " if progress else ""
         try:
-            skip = peek_skip_build_reason(site, title, WIKI_BOT_USER, FORCE_OVERWRITE)
+            skip = peek_skip_build_reason(site, title, WIKI_BOT_USER, effective_force)
             if skip:
                 t1 = time.perf_counter()
                 stats[skip] = stats.get(skip, 0) + 1
@@ -1034,7 +1037,7 @@ def run_import(
             return build_status_effects_index_wikitext(site, status_effects_rows, data, version)
 
         def save_status_index(s, ttl, txt, ver, user, k):
-            return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=FORCE_OVERWRITE)
+            return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=effective_force)
 
         _one(
             "status_effects_index",
@@ -1072,7 +1075,7 @@ def run_import(
             )
 
         def save_item(s, ttl, txt, ver, user, k):
-            return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=FORCE_OVERWRITE)
+            return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=effective_force)
 
         _one(
             "item",
@@ -1103,7 +1106,7 @@ def run_import(
             )
 
         def save_loc(s, ttl, txt, ver, user, k):
-            return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=FORCE_OVERWRITE)
+            return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=effective_force)
 
         _one(
             "location",
@@ -1133,7 +1136,7 @@ def run_import(
             )
 
         def save_biome(s, ttl, txt, ver, user, k):
-            return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=FORCE_OVERWRITE)
+            return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=effective_force)
 
         _one(
             "biome",
@@ -1176,7 +1179,7 @@ def run_import(
             )
 
         def save_ent(s, ttl, txt, ver, user, k):
-            return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=FORCE_OVERWRITE)
+            return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=effective_force)
 
         _one(
             "entity",
@@ -1200,7 +1203,7 @@ def run_import(
             )
 
         def save_skin(s, ttl, txt, ver, user, k):
-            return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=FORCE_OVERWRITE)
+            return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=effective_force)
 
         _one(
             "skin",
@@ -1218,7 +1221,7 @@ def run_import(
             return build_account_stat_wikitext(s, version)
 
         def save_account_stat(s, ttl, txt, ver, user, k):
-            return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=FORCE_OVERWRITE)
+            return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=effective_force)
 
         _one(
             "account_stat",
@@ -1241,7 +1244,7 @@ def run_import(
             )
 
         def save_badge(s, ttl, txt, ver, user, k):
-            return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=FORCE_OVERWRITE)
+            return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=effective_force)
 
         _one(
             "badge",
@@ -1280,7 +1283,7 @@ def run_import(
             )
 
         def save_ach(s, ttl, txt, ver, user, k):
-            return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=FORCE_OVERWRITE)
+            return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=effective_force)
 
         _one(
             "achievement",
@@ -1318,7 +1321,7 @@ def run_import(
             )
 
         def save_qu(s, ttl, txt, ver, user, k):
-            return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=FORCE_OVERWRITE)
+            return save_bot_page(s, ttl, txt, ver, user, k, force_overwrite=effective_force)
 
         _one(
             "quest",

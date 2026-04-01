@@ -5,6 +5,7 @@ Set-Location (Join-Path $ScriptDir "..")
 
 $Prod = $false
 $Kinds = $null
+$ForceOverwrite = $false
 $Rest = [System.Collections.ArrayList]@()
 for ($i = 0; $i -lt $args.Count; $i++) {
     $a = $args[$i]
@@ -13,6 +14,8 @@ for ($i = 0; $i -lt $args.Count; $i++) {
     } elseif ($a -eq "--kinds" -and ($i + 1) -lt $args.Count) {
         $i++
         $Kinds = $args[$i]
+    } elseif ($a -eq "--force-overwrite" -or $a -eq "--force") {
+        $ForceOverwrite = $true
     } else {
         [void]$Rest.Add($a)
     }
@@ -52,6 +55,9 @@ if (-not $UrlBase -or -not ($UrlBase -like "http*")) {
 $Url = "$UrlBase`?max_changes=$MaxChanges&max_diff_chars=$MaxDiffChars"
 if ($Kinds) {
     $Url = "$Url&kinds=$Kinds"
+}
+if ($ForceOverwrite) {
+    $Url = "$Url&force_overwrite=1"
 }
 
 Write-Host "POSTing $Dump to $Url ..."
