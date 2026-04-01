@@ -222,12 +222,17 @@ final class Hooks {
 	 * @param mixed $skin Skin instance (Vector legacy does not satisfy MediaWiki\Skin\Skin in all MW versions).
 	 */
 	public static function onBeforePageDisplay( OutputPage $out, $skin ): void {
-		if ( strtolower( (string)$out->getRequest()->getVal( 'action', 'view' ) ) !== 'view' ) {
+		$req = $out->getRequest();
+		if ( strtolower( (string)$req->getVal( 'action', 'view' ) ) !== 'view' ) {
 			return;
 		}
 		$t = $out->getTitle();
 		if ( !$t instanceof Title ) {
 			return;
+		}
+		// Root User:Foo — show "Foo" in the in-page heading (not "User:Foo"); subpages unchanged.
+		if ( $t->getNamespace() === \NS_USER && !$t->isSubpage() ) {
+			$out->setPageTitle( $t->getText() );
 		}
 		$n = $t->getNamespace();
 		if ( $n !== \NS_MAIN && $n !== \NS_FILE ) {
