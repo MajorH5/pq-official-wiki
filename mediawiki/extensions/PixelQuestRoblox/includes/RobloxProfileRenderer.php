@@ -318,6 +318,18 @@ final class RobloxProfileRenderer {
 	}
 
 	/**
+	 * Internal link to User:&lt;name&gt; when this Roblox profile is linked to a wiki account.
+	 */
+	private static function htmlWikiUserPageLink( IContextSource $ctx, User $target ): string {
+		if ( !$target->isRegistered() ) {
+			return '';
+		}
+		$userTitle = Title::newFromLinkTarget( $target->getUserPage() );
+		$label = $ctx->msg( 'pqroblox-profile-wiki-user-link' )->text();
+		return Html::element( 'a', [ 'href' => $userTitle->getLocalURL() ], $label );
+	}
+
+	/**
 	 * External link to roblox.com profile; link text is i18n ("Roblox profile").
 	 */
 	private static function htmlRobloxProfileLink( IContextSource $ctx, int $robloxUserId ): string {
@@ -361,10 +373,9 @@ final class RobloxProfileRenderer {
 				$badgeHtml = self::iconOnlyLink( $bTitle, $bUrl, 'pq-roblox-badge-ico', self::BADGE_ICON_PX );
 			}
 		}
-		$tailBlock = $profileLink;
-		if ( $badgeHtml !== '' ) {
-			$tailBlock = $badgeHtml . ' · ' . $profileLink;
-		}
+		$wikiUserHtml = self::htmlWikiUserPageLink( $ctx, $target );
+		$tailParts = array_values( array_filter( [ $wikiUserHtml, $badgeHtml, $profileLink ] ) );
+		$tailBlock = implode( ' · ', $tailParts );
 		if ( $robloxPublic !== null && $robloxPublic['name'] !== '' ) {
 			$n = $robloxPublic['name'];
 			$dn = $robloxPublic['displayName'] ?? '';
