@@ -20,5 +20,8 @@ RewriteRule ^\.git(/|$) - [F,L]
 RewriteRule ^LocalSettings\.php$ - [F,L]
 RewriteRule ^AdminSettings\.php$ - [F,L]
 
+# Pretty sitemap URL (core REST index); requires $wgSitemapApiConfig['enabled'] = true in LocalSettings.php
+RewriteRule ^sitemap\.xml$ /rest.php/site/v1/sitemap/0 [L,QSA]
+
 RewriteRule ^/?wiki(/.*)?$ %{DOCUMENT_ROOT}/index.php [L]
 </IfModule>
