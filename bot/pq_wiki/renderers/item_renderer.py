@@ -919,8 +919,8 @@ def _format_trigger_descriptions(raw: object) -> str:
     out: list[str] = []
     for entry in raw:
         if isinstance(entry, (list, tuple)) and len(entry) >= 2:
-            trigger = str(entry[0]).strip()
-            desc = str(entry[1]).strip()
+            trigger = html_to_wikitext(str(entry[0]).strip())
+            desc = html_to_wikitext(str(entry[1]).strip())
             if trigger or desc:
                 out.append(f"{trigger} -> {desc}".strip(" ->"))
     return "<br>".join(out)
