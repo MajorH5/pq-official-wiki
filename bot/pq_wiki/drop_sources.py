@@ -102,9 +102,10 @@ def build_item_id_to_drop_sources(
 
     out: dict[int, list[ItemDropSource]] = {}
     for iid, inner in bucket.items():
+        # Entity id descending: stable across runs (name-based sort followed dict order).
         rows = sorted(
             inner.values(),
-            key=lambda r: (r.entity_name.lower(), r.via, r.group_label or ""),
+            key=lambda r: (-r.entity_id, r.via, r.group_label or ""),
         )
         out[iid] = rows
     return out
