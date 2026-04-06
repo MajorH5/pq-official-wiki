@@ -1125,6 +1125,8 @@ def _resolve_item_group_item_ids(
         if iid not in seen:
             seen.add(iid)
             deduped.append(iid)
+    # Stable order: dict iteration was insertion-order-dependent; previews and drop tables must not shuffle.
+    deduped.sort(key=lambda i: -i)
     return deduped
 
 
