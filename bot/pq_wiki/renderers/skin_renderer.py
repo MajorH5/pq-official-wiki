@@ -48,9 +48,14 @@ def _format_animation_caption(anim_key: str) -> str:
 
 
 def _rarity_head_wikitext(rarity: int) -> str:
-    r = min(max(int(rarity), 0), 4)
-    label = _RARITY_LABEL[r]
-    color = _RARITY_COLOR[r]
+    raw = int(rarity)
+    if raw == -1:
+        label = "UGC Skin"
+        color = "#FF69B4"
+    else:
+        r = min(max(raw, 0), 4)
+        label = _RARITY_LABEL[r]
+        color = _RARITY_COLOR[r]
     return f"'''Skin''' · <span style=\"color:{color};font-weight:bold\">{label}</span>"
 
 
