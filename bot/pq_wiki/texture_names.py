@@ -16,6 +16,7 @@ from typing import Any
 TIER_ROW_TO_THEME: dict[int, str] = {
     0: "tier_star",
     2: "tier_pixelween",
+    4: "tier_easter",
     8: "tier_pixelmas",
     9: "tier_gamemode",
     10: "tier_corrupted",

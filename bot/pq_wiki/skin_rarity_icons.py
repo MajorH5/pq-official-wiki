@@ -43,7 +43,7 @@ def build_skin_rarity_wikitext_map(
     sheet = Image.open(io.BytesIO(raw)).convert("RGBA")
     out: dict[int, str] = {}
     for r in sorted(set(int(x) for x in rarities)):
-        if r < 0 or r > 4:
+        if r not in {-1, 0, 1, 2, 3, 4}:
             continue
         try:
             data, ext = render_skin_rarity_icon_bytes(r, sheet)

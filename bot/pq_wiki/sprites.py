@@ -349,6 +349,20 @@ def render_skin_rarity_icon_bytes(rarity: int, sheet: Image.Image) -> tuple[byte
     Common/Uncommon: static PNG. Rare+: 6 horizontal frames, 150 ms/frame.
     """
     r = int(rarity)
+    if r == -1:
+        # Special animated skin rarity icon on the tier sheet.
+        # Source animation:
+        # Base=(16*6,16*1), Size=(16,16), Frames={(0,0)..(4,0)}.
+        base_x = 16 * 6
+        base_y = 16 * 1
+        frame_w = frame_h = 16
+        frames: list[Image.Image] = []
+        for col in range(5):
+            left = base_x + col * frame_w
+            top = base_y
+            frames.append(_crop_sheet(sheet, left, top, frame_w, frame_h).convert("RGBA"))
+        return _rgba_frames_to_transparent_gif(frames, 100), "gif"
+
     top = (3 + r) * _SKIN_RARITY_CELL
     w = h = _SKIN_RARITY_CELL
     if r <= 1:

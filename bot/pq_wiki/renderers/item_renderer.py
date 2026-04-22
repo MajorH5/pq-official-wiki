@@ -70,13 +70,6 @@ def _chest_item_shows_variant_spawns_row(
     return _loot_chest_parent_go(entity_id_to_go) is not None
 
 
-def _normalized_tier_label(raw_tier: object) -> str:
-    t = str(raw_tier or "").strip()
-    if not t:
-        return ""
-    return t.upper() if t.lower().startswith("t") else t
-
-
 def build_item_wikitext(
     site: pywikibot.Site,
     item: dict,
@@ -330,11 +323,7 @@ def build_item_wikitext(
     type_cats = _categories_from_hierarchy(hier)
     for cat in type_cats:
         cat_lines.append(f"[[Category:{cat}]]")
-    tier_label = _normalized_tier_label(tier)
-    if tier_label and ("equipment" in hier_l):
-        cat_lines.append(f"[[Category:{tier_label} Items]]")
-        for cat in type_cats:
-            cat_lines.append(f"[[Category:{cat} {tier_label}]]")
+    # No tier-specific categories (e.g. T5 Items, Staff T5): item pages already encode tier; type categories suffice.
     categories_block = "\n".join(cat_lines)
 
     body = template_invocation(
