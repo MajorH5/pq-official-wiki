@@ -290,18 +290,32 @@ def _as_int_set(vals: Any) -> set[int]:
     return out
 
 
-def _as_str_set(vals: Any) -> set[str]:
-    """Normalized lowercase strings for case-insensitive matching (e.g. chest kind enums)."""
+def _parse_chest_kinds_skip(vals: Any) -> dict[str, set]:
+    """
+    wiki_overrides skip.chest_kinds: integers are ChestId spawn ids; strings are ChestKind/Kind enums.
+    """
+    labels: set[str] = set()
+    ids: set[int] = set()
     if not isinstance(vals, list):
-        return set()
-    out: set[str] = set()
+        return {"labels": labels, "ids": ids}
     for v in vals:
-        if v is None:
+        if v is None or isinstance(v, bool):
+            continue
+        if isinstance(v, int):
+            ids.add(v)
+            continue
+        if isinstance(v, float) and v == int(v):
+            ids.add(int(v))
             continue
         s = str(v).strip()
-        if s:
-            out.add(s.lower())
-    return out
+        if not s:
+            continue
+        try:
+            ids.add(int(s, 10))
+            continue
+        except ValueError:
+            labels.add(s.lower())
+    return {"labels": labels, "ids": ids}
 
 
 def _chest_info_entry_kind_key(ci: dict[str, Any]) -> str | None:
@@ -318,10 +332,11 @@ def _chest_info_entry_kind_key(ci: dict[str, Any]) -> str | None:
 
 def apply_skip_chest_kinds_to_game_objects(
     game_objects: list[dict[str, Any]],
-    skip_kinds: set[str],
+    skip_kind_labels: set[str],
+    skip_chest_ids: set[int],
 ) -> None:
-    """Drop ChestInfo rows whose kind is in skip_kinds (entries without kind are kept)."""
-    if not skip_kinds:
+    """Drop ChestInfo rows matching skip_kind_labels (ChestKind/Kind) or skip_chest_ids (ChestId)."""
+    if not skip_kind_labels and not skip_chest_ids:
         return
     for go in game_objects:
         raw = go.get("ChestInfo")
@@ -331,8 +346,15 @@ def apply_skip_chest_kinds_to_game_objects(
         for ci in raw:
             if not isinstance(ci, dict):
                 continue
+            if skip_chest_ids:
+                try:
+                    cid = int(ci.get("ChestId"))
+                except (TypeError, ValueError):
+                    cid = None
+                if cid is not None and cid in skip_chest_ids:
+                    continue
             k = _chest_info_entry_kind_key(ci)
-            if k is not None and k in skip_kinds:
+            if k is not None and k in skip_kind_labels:
                 continue
             kept.append(ci)
         go["ChestInfo"] = kept
@@ -349,7 +371,7 @@ def load_overrides() -> dict[str, Any]:
             "badges": set(),
             "achievements": set(),
             "quests": set(),
-            "chest_kinds": set(),
+            "chest_kinds": {"labels": set(), "ids": set()},
         },
         "unreleased": {
             "items": set(),
@@ -378,7 +400,7 @@ def load_overrides() -> dict[str, Any]:
     if isinstance(raw, dict):
         skip_block = raw.get("skip")
         if isinstance(skip_block, dict) and "chest_kinds" in skip_block:
-            defaults["skip"]["chest_kinds"] = _as_str_set(skip_block.get("chest_kinds"))
+            defaults["skip"]["chest_kinds"] = _parse_chest_kinds_skip(skip_block.get("chest_kinds"))
     if isinstance(raw, dict) and "show_hidden_achievements" in raw:
         defaults["show_hidden_achievements"] = _as_int_set(raw.get("show_hidden_achievements"))
     return defaults
@@ -534,6 +556,8 @@ def run_import(
     skip_achievements = overrides["skip"]["achievements"]
     skip_quests = overrides["skip"]["quests"]
     skip_chest_kinds = overrides["skip"]["chest_kinds"]
+    skip_chest_kind_labels = skip_chest_kinds.get("labels") or set()
+    skip_chest_ids = skip_chest_kinds.get("ids") or set()
     unreleased_items = overrides["unreleased"]["items"]
     unreleased_locations = overrides["unreleased"]["locations"]
     unreleased_entities = overrides["unreleased"]["entities"]
@@ -552,7 +576,9 @@ def run_import(
         for go in game_objects
         if (not go.get("IsEntity", True)) or int(go.get("Id", -1)) not in skip_entities
     ]
-    apply_skip_chest_kinds_to_game_objects(game_objects, skip_chest_kinds)
+    apply_skip_chest_kinds_to_game_objects(
+        game_objects, skip_chest_kind_labels, skip_chest_ids
+    )
     character_skins = data.get("CharacterSkins") or []
     character_skins = [s for s in character_skins if int(s.get("Id", -1)) not in skip_skins]
 
@@ -621,7 +647,7 @@ def run_import(
         len(skip_badges),
         len(skip_achievements),
         len(skip_quests),
-        len(skip_chest_kinds),
+        len(skip_chest_kind_labels) + len(skip_chest_ids),
         len(unreleased_items),
         len(unreleased_locations),
         len(unreleased_entities),

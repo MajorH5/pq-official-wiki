@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import pywikibot
 
-from pq_wiki.renderers.entity_renderer import _layout_drops_multicolumn
+from pq_wiki.renderers.entity_renderer import (
+    _layout_drops_multicolumn,
+    _render_drop_item_icon_with_tier,
+)
 from pq_wiki.renderers.shared import find_dungeon_key, link_entity
 from pq_wiki.seo import first_wiki_filename_from_file_wikitext, wiki_seo_block
 from pq_wiki.texture_names import (
@@ -96,6 +99,7 @@ def build_location_wikitext(
             )
         )
     portal_rows.append(("Max players", fmt_num(loc.get("MaxPlayerCount"))))
+    _append_location_pity_rows(portal_rows, loc, site, version, item_id_to_path, item_id_to_item)
     portal_table = wikitable(portal_rows)
 
     map_section = _build_map_section(site, loc, version, name, loc_slug)
@@ -171,6 +175,62 @@ def build_location_wikitext(
         image_alt=f"{name} preview",
     )
     return f"{body}\n\n{seo}"
+
+
+def _append_location_pity_rows(
+    portal_rows: list[tuple[str, str]],
+    loc: dict,
+    site: pywikibot.Site,
+    version: str,
+    item_id_to_path: dict[int, str],
+    item_id_to_item: dict[int, dict] | None,
+) -> None:
+    max_pity = loc.get("MaxPity")
+    if max_pity is not None:
+        portal_rows.append(("Max pity", fmt_num(max_pity)))
+    chest_health = loc.get("ChestHealth")
+    if chest_health is not None:
+        portal_rows.append(("Chest health", fmt_num(chest_health)))
+    legendaries = loc.get("Legendaries")
+    if isinstance(legendaries, list) and legendaries:
+        cell = _legendaries_wikitext(
+            site, legendaries, version, item_id_to_path, item_id_to_item
+        )
+        if cell:
+            portal_rows.append(("Legendaries", cell))
+
+
+def _legendaries_wikitext(
+    site: pywikibot.Site,
+    item_ids: list,
+    version: str,
+    item_id_to_path: dict[int, str],
+    item_id_to_item: dict[int, dict] | None,
+) -> str:
+    parts: list[str] = []
+    for raw in item_ids:
+        try:
+            iid = int(raw)
+        except (TypeError, ValueError):
+            continue
+        it = item_id_to_item.get(iid) if item_id_to_item else None
+        name = str(it.get("Name") or f"Item {iid}") if it else f"Item {iid}"
+        path = item_id_to_path.get(iid)
+        icon = ""
+        if it:
+            icon = _render_drop_item_icon_with_tier(site, it, version, path)
+        label = f"[[{path}|{name}]]" if path else name
+        chunk = f"{icon} {label}".strip() if icon else label
+        parts.append(
+            f'<span style="display:inline-flex; align-items:center; gap:6px;">{chunk}</span>'
+        )
+    if not parts:
+        return ""
+    return (
+        '<span style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">'
+        + "".join(parts)
+        + "</span>"
+    )
 
 
 def _key_inline_wikitext(
