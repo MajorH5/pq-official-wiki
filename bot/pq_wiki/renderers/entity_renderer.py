@@ -856,9 +856,7 @@ def _stat_icon(name: str, stat_icons: dict[str, str] | None) -> str:
 _STATUS_EFFECTS_OMIT_INTENSITY = frozenset({
     "INVULNERABLE",
     "ARMOR_BROKEN",
-    "SLOWED",
     "ARMORED",
-    "SICK",
     "PARALYZE",
     "QUIET",
     "STUNNED",
