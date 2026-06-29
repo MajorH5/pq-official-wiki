@@ -78,3 +78,4 @@ RUN printf '%s\n' \
 	&& a2enconf pq-wiki-htaccess
 
 COPY .htaccess /var/www/html/.htaccess
+COPY robots.txt /var/www/html/robots.txt

@@ -1,0 +1,6 @@
+User-agent: *
+Crawl-delay: 10
+Disallow: /mw-config/
+Disallow: /wiki/Special:
+Disallow: /index.php?title=Special:
+Disallow: /api.php
