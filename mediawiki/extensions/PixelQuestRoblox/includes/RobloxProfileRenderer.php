@@ -115,7 +115,13 @@ final class RobloxProfileRenderer {
 		string $vaultQ = '',
 		?string $activeTab = null,
 		?array $robloxPublic = null,
-		?bool $profileOwnerHint = null
+		?bool $profileOwnerHint = null,
+		?array $itemLogData = null,
+		bool $canViewItemLogs = false,
+		int $logsPage = 1,
+		string $logsType = 'all',
+		string $logsQ = '',
+		string $traceUid = ''
 	): void {
 		$out->addModuleStyles( 'ext.pqroblox.profile' );
 		$out->addModules( [ 'ext.pqroblox.profile' ] );
@@ -295,6 +301,37 @@ final class RobloxProfileRenderer {
 					],
 				] );
 			}
+		}
+
+		if ( $canViewItemLogs ) {
+			$logsPanel = [
+				'id' => 'pq-roblox-panel-logs',
+				'labelKey' => 'pqroblox-tab-logs',
+				'html' => PqRobloxItemLogsRenderer::renderPanel(
+					$ctx,
+					$lookup,
+					$title,
+					$robloxUserId,
+					$itemLogData,
+					[
+						'page' => $logsPage,
+						'type' => $logsType,
+						'q' => $logsQ,
+						'traceUid' => $traceUid,
+					]
+				),
+			];
+			$insertAt = count( $panels );
+			foreach ( $panels as $idx => $panel ) {
+				if ( $panel['id'] === 'pq-roblox-panel-settings' ) {
+					$insertAt = $idx;
+					break;
+				}
+				if ( $panel['id'] === 'pq-roblox-panel-account-stats' ) {
+					$insertAt = $idx + 1;
+				}
+			}
+			array_splice( $panels, $insertAt, 0, [ $logsPanel ] );
 		}
 
 		if ( count( $panels ) === 1 ) {

@@ -56,6 +56,13 @@ final class SpecialPQProfile extends SpecialPage {
 		}
 		$vaultType = trim( (string)$req->getText( 'vaultType', '' ) );
 		$vaultQ = trim( (string)$req->getText( 'vaultQ', '' ) );
+		$logsPage = max( 1, (int)$req->getInt( 'logspage', 1 ) );
+		$logsType = strtolower( trim( (string)$req->getText( 'logsType', 'all' ) ) );
+		if ( !in_array( $logsType, [ 'all', 'slot', 'trade' ], true ) ) {
+			$logsType = 'all';
+		}
+		$logsQ = trim( (string)$req->getText( 'logsQ', '' ) );
+		$traceUid = trim( (string)$req->getText( 'traceUid', '' ) );
 
 		$activeTab = trim( (string)$req->getText( 'tab', '' ) );
 		$allowedTabs = [
@@ -65,6 +72,7 @@ final class SpecialPQProfile extends SpecialPage {
 			'pq-roblox-panel-badges',
 			'pq-roblox-panel-vault',
 			'pq-roblox-panel-account-stats',
+			'pq-roblox-panel-logs',
 			'pq-roblox-panel-settings',
 		];
 		if ( $activeTab === '' || !in_array( $activeTab, $allowedTabs, true ) ) {
@@ -196,6 +204,10 @@ final class SpecialPQProfile extends SpecialPage {
 		$indexStore->upsert( $robloxId, $indexName );
 		$show = self::resolveVisibility( $viewer, $target, $isProfileOwner, $viewerRobloxId, $robloxId );
 		$lookup = PqRobloxLookupIndex::instance();
+		$canViewLogs = self::canViewItemLogs( $viewer );
+		$itemLogData = $canViewLogs
+			? PqRobloxDataStoreClient::getItemLogDataForRobloxUser( $robloxId, $forceRefresh )
+			: null;
 
 		if ( !$isEmbed
 			&& $linkedWikiId === null
@@ -230,7 +242,13 @@ final class SpecialPQProfile extends SpecialPage {
 			$vaultQ,
 			$activeTab,
 			$robloxPublic,
-			$isProfileOwner
+			$isProfileOwner,
+			$itemLogData,
+			$canViewLogs,
+			$logsPage,
+			$logsType,
+			$logsQ,
+			$traceUid
 		);
 	}
 
@@ -254,6 +272,22 @@ final class SpecialPQProfile extends SpecialPage {
 			return true;
 		}
 		return $viewerRobloxId !== null && $viewerRobloxId > 0 && $viewerRobloxId === $targetRobloxId;
+	}
+
+	private static function canViewItemLogs( User $viewer ): bool {
+		if ( !$viewer->isRegistered() ) {
+			return false;
+		}
+		if ( $viewer->isAllowed( 'userrights' ) ) {
+			return true;
+		}
+		$groups = $viewer->getEffectiveGroups();
+		foreach ( [ 'admin', 'sysop', 'bureaucrat', 'steward' ] as $group ) {
+			if ( in_array( $group, $groups, true ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

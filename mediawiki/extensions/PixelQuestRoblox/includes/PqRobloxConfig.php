@@ -64,6 +64,22 @@ final class PqRobloxConfig {
 		return is_string( $v ) ? trim( $v ) : '';
 	}
 
+	public static function getItemDataStoreName(): string {
+		global $wgPqRobloxItemDataStoreName;
+		if ( isset( $wgPqRobloxItemDataStoreName ) && is_string( $wgPqRobloxItemDataStoreName ) && $wgPqRobloxItemDataStoreName !== '' ) {
+			return $wgPqRobloxItemDataStoreName;
+		}
+		$v = getenv( 'ROBLOX_ITEM_DATA_STORE_NAME' );
+		if ( is_string( $v ) && trim( $v ) !== '' ) {
+			return trim( $v );
+		}
+		$v = getenv( 'PIXEL_QUEST_ITEMS_PROD_DATABASE' );
+		if ( is_string( $v ) && trim( $v ) !== '' ) {
+			return trim( $v );
+		}
+		return '';
+	}
+
 	/** Absolute path to pq-datadump.json (items, skins, entities for lookups). */
 	public static function getDataDumpPath(): string {
 		global $wgPqRobloxDataDumpPath;

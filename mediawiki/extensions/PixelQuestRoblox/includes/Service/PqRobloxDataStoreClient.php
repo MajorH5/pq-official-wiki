@@ -74,17 +74,43 @@ final class PqRobloxDataStoreClient {
 		$universe = PqRobloxConfig::getRobloxUniverseId();
 		$apiKey = PqRobloxConfig::getRobloxOpenCloudApiKey();
 		$store = PqRobloxConfig::getDataStoreName();
+		return self::getDataForRobloxUserInStore( $robloxUserId, $store, 'playerdata', $forceRefresh );
+	}
+
+	/**
+	 * @return array<string, mixed>|null Decoded item-log table (best-effort), or null if missing / error.
+	 */
+	public static function getItemLogDataForRobloxUser( int $robloxUserId, bool $forceRefresh = false ): ?array {
+		if ( $robloxUserId <= 0 ) {
+			self::log( "getItemLogDataForRobloxUser: skip (invalid id $robloxUserId)" );
+			return null;
+		}
+		$store = PqRobloxConfig::getItemDataStoreName();
+		return self::getDataForRobloxUserInStore( $robloxUserId, $store, 'itemlogs', $forceRefresh );
+	}
+
+	/**
+	 * @return array<string, mixed>|null
+	 */
+	private static function getDataForRobloxUserInStore(
+		int $robloxUserId,
+		string $store,
+		string $cacheScope,
+		bool $forceRefresh
+	): ?array {
+		$universe = PqRobloxConfig::getRobloxUniverseId();
+		$apiKey = PqRobloxConfig::getRobloxOpenCloudApiKey();
 		if ( $universe === '' || $apiKey === '' || $store === '' ) {
-			self::log( 'getPlayerDataForRobloxUser: missing config (universe, API key, or ROBLOX_DATA_STORE_NAME empty)' );
+			self::log( "getDataForRobloxUserInStore: missing config for $cacheScope (universe, API key, or datastore name empty)" );
 			return null;
 		}
 
 		$cache = MediaWikiServices::getInstance()->getMainWANObjectCache();
-		$key = $cache->makeGlobalKey( 'pqroblox', 'playerdata', 'v2', (string)$robloxUserId );
+		$key = $cache->makeGlobalKey( 'pqroblox', $cacheScope, 'v2', (string)$robloxUserId );
 		$ttl = PqRobloxConfig::getPlayerDataCacheTTL();
 
 		if ( $forceRefresh ) {
-			self::log( "getPlayerDataForRobloxUser: force refresh, deleting WAN key for robloxUserId=$robloxUserId" );
+			self::log( "getDataForRobloxUserInStore: force refresh, deleting WAN key scope=$cacheScope robloxUserId=$robloxUserId" );
 			$cache->delete( $key );
 		}
 

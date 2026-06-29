@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import json
 import pywikibot
 
 from pq_wiki.renderers.shared import fmt_range, format_drop
@@ -1281,7 +1282,7 @@ def _skin_metadata_entry(
     rr = int(sk.get("Rarity") or 0)
     return {
         "kind": "skin",
-        "key": f"skin:{sid}",
+        "key": f"skin:{sid}{_drop_metadata_key_suffix(drop)}",
         "name": name,
         "skin_id": sid,
         # Group with drop tier 6 (other legendaries) in loot tables, not tier 0.
@@ -1289,6 +1290,17 @@ def _skin_metadata_entry(
         "tier_sort_value": max(0, 10 - rr),
         "type_label": "Skin",
     }
+
+
+def _drop_metadata_key_suffix(drop: dict) -> str:
+    md = drop.get("Metadata")
+    if md is None:
+        return ""
+    try:
+        encoded = json.dumps(md, sort_keys=True, separators=(",", ":"), default=str)
+    except (TypeError, ValueError):
+        encoded = str(md)
+    return f"|metadata:{encoded}"
 
 
 def _normalize_enemy_drop_entries(
@@ -1310,7 +1322,7 @@ def _normalize_enemy_drop_entries(
         tier_raw = str(it.get("Tier") or "")
         return {
             "kind": "item",
-            "key": f"item:{it.get('Id') or item_name}",
+            "key": f"item:{it.get('Id') or item_name}{_drop_metadata_key_suffix(drop)}",
             "name": item_name,
             "item_id": iid,
             "type_label": str((it.get("TypeHierarchy") or ["Item"])[0]),
@@ -1326,7 +1338,7 @@ def _normalize_enemy_drop_entries(
             item_name = str(it.get("Name") or f"Item {matched[0]}")
             return {
                 "kind": "item",
-                "key": f"item:{it.get('Id') or item_name}",
+                "key": f"item:{it.get('Id') or item_name}{_drop_metadata_key_suffix(drop)}",
                 "name": item_name,
                 "item_id": matched[0],
                 "type_label": str((it.get("TypeHierarchy") or ["Item"])[0]),
@@ -1343,7 +1355,7 @@ def _normalize_enemy_drop_entries(
                 drop_tier_type = max(drop_tier_type, int(it.get("DropTierType") or 0))
         return {
             "kind": "itemgroup",
-            "key": f"group:{group_name}",
+            "key": f"group:{group_name}{_drop_metadata_key_suffix(drop)}",
             "name": group_name,
             "group_kind": kind,
             "group_tier": tier_raw,

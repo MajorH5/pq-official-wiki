@@ -514,6 +514,90 @@
 	padding: 0.25em 0.6em;
 }
 
+.pq-roblox-log-filters {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	align-items: center;
+	margin: 0.25em 0 0.35em;
+}
+
+.pq-roblox-log-search {
+	width: 20em;
+	max-width: 100%;
+}
+
+.pq-roblox-log-trace {
+	width: 18em;
+	max-width: 100%;
+}
+
+.pq-roblox-log-table-wrap {
+	max-width: 100%;
+	overflow-x: auto;
+}
+
+.pq-roblox-log-table th,
+.pq-roblox-log-table td {
+	padding: 0.35em 0.45em;
+	vertical-align: middle;
+}
+
+.pq-roblox-log-time {
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+
+.pq-roblox-log-type,
+.pq-roblox-log-action {
+	white-space: nowrap;
+}
+
+.pq-roblox-log-detail {
+	min-width: 28em;
+}
+
+.pq-roblox-log-item {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3em;
+	margin-right: 0.15em;
+}
+
+.pq-roblox-log-item-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	line-height: 0;
+}
+
+.pq-roblox-log-item-icon img {
+	image-rendering: pixelated;
+	image-rendering: -moz-crisp-edges;
+	image-rendering: crisp-edges;
+}
+
+.pq-roblox-log-uid {
+	font-size: 0.82em;
+	white-space: nowrap;
+}
+
+.pq-roblox-log-trace-box {
+	border: 1px solid #c8ccd1;
+	border-radius: 4px;
+	background: #f8f9fa;
+	padding: 0.65em 0.85em;
+	margin: 0.5em 0 0.75em;
+}
+
+.pq-roblox-log-trace-box h3 {
+	margin-top: 0;
+}
+
+.pq-roblox-log-trace-final {
+	font-weight: 600;
+}
+
 .pq-roblox-grave th,
 .pq-roblox-grave td {
 	padding: 0.35em 0.45em;
