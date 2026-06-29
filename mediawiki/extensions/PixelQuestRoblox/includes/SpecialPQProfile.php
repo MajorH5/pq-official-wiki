@@ -281,7 +281,7 @@ final class SpecialPQProfile extends SpecialPage {
 		if ( $viewer->isAllowed( 'userrights' ) ) {
 			return true;
 		}
-		$groups = $viewer->getEffectiveGroups();
+		$groups = MediaWikiServices::getInstance()->getUserGroupManager()->getUserEffectiveGroups( $viewer );
 		foreach ( [ 'admin', 'sysop', 'bureaucrat', 'steward' ] as $group ) {
 			if ( in_array( $group, $groups, true ) ) {
 				return true;
